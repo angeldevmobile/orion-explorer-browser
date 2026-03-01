@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 215 25% 8%;
+    --foreground: 220 15% 92%;
+
+    --card: 215 25% 10%;
+    --card-foreground: 220 15% 92%;
+
+    --popover: 215 25% 10%;
+    --popover-foreground: 220 15% 92%;
+
+    --primary: 195 100% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 280 90% 65%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 215 25% 13%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 340 95% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 25% 18%;
+    --input: 215 25% 15%;
+    --ring: 195 100% 55%;
+
+    --radius: 1rem;
+    
+    /* Custom Orion variables */
+    --browser-chrome: 215 25% 9%;
+    --tab-active: 215 25% 13%;
+    --tab-inactive: 215 25% 10%;
+    --toolbar: 215 25% 11%;
+    --orion-glow: 195 100% 55%;
+    
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 55%), hsl(280 90% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(280 90% 65%), hsl(340 95% 60%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 60%), hsl(340 95% 60%));
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(195 100% 55% / 0.12) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(280 90% 65% / 0.12) 0px, transparent 50%),
+                     radial-gradient(at 0% 50%, hsl(340 95% 60% / 0.08) 0px, transparent 50%);
+    
+    --shadow-soft: 0 2px 12px -2px hsl(0 0% 0% / 0.3);
+    --shadow-medium: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
+    --shadow-strong: 0 8px 40px -8px hsl(0 0% 0% / 0.5);
+    --shadow-glow: 0 0 40px hsl(195 100% 55% / 0.5);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  
+  /* Alternative Themes */
+  [data-theme="ocean"] {
+    --primary: 195 100% 55%;
+    --secondary: 200 90% 60%;
+    --accent: 210 95% 65%;
+    --orion-glow: 195 100% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 55%), hsl(200 90% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(200 90% 60%), hsl(210 95% 65%));
+  }
+  
+  [data-theme="sunset"] {
+    --primary: 25 95% 55%;
+    --secondary: 340 95% 60%;
+    --accent: 280 90% 65%;
+    --orion-glow: 25 95% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(25 95% 55%), hsl(340 95% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(340 95% 60%), hsl(280 90% 65%));
+  }
+  
+  [data-theme="forest"] {
+    --primary: 140 70% 45%;
+    --secondary: 160 65% 50%;
+    --accent: 180 60% 55%;
+    --orion-glow: 140 70% 45%;
+    --gradient-primary: linear-gradient(135deg, hsl(140 70% 45%), hsl(160 65% 50%));
+    --gradient-secondary: linear-gradient(135deg, hsl(160 65% 50%), hsl(180 60% 55%));
+  }
+  
+  [data-theme="purple"] {
+    --primary: 280 90% 65%;
+    --secondary: 260 85% 60%;
+    --accent: 300 80% 55%;
+    --orion-glow: 280 90% 65%;
+    --gradient-primary: linear-gradient(135deg, hsl(280 90% 65%), hsl(260 85% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(260 85% 60%), hsl(300 80% 55%));
+  }
+
+  .light {
+    --background: 225 25% 98%;
+    --foreground: 225 15% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 15% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 15% 12%;
+
+    --primary: 195 100% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 280 90% 65%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 225 20% 94%;
+    --muted-foreground: 225 10% 40%;
+
+    --accent: 340 95% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 15% 88%;
+    --input: 225 15% 92%;
+    --ring: 195 100% 45%;
+    
+    /* Custom Orion light variables */
+    --browser-chrome: 225 25% 96%;
+    --tab-active: 0 0% 100%;
+    --tab-inactive: 225 20% 92%;
+    --toolbar: 0 0% 100%;
+    --orion-glow: 195 100% 45%;
+    
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(195 100% 45% / 0.15) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(280 90% 65% / 0.15) 0px, transparent 50%),
+                     radial-gradient(at 0% 50%, hsl(340 95% 60% / 0.1) 0px, transparent 50%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+  }
+  
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 20px hsl(var(--orion-glow) / 0.3); }
+    50% { box-shadow: 0 0 40px hsl(var(--orion-glow) / 0.6); }
+  }
+  
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-glow-pulse {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+  
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
