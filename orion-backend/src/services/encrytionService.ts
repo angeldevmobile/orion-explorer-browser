@@ -1,19 +1,16 @@
-import bcrypt from "bcrypt";
-
-const SALT_ROUNDS = 10;
+import bcrypt from "bcryptjs";
 
 export class EncryptionService {
-  /**
-   * Hash de password usando bcrypt
-   */
+  private static SALT_ROUNDS = 12;
+
   static async hashPassword(password: string): Promise<string> {
-    return await bcrypt.hash(password, SALT_ROUNDS);
+    return bcrypt.hash(password, this.SALT_ROUNDS);
   }
 
-  /**
-   * Compara password con hash
-   */
-  static async comparePassword(password: string, hash: string): Promise<boolean> {
-    return await bcrypt.compare(password, hash);
+  static async comparePassword(
+    password: string,
+    hashedPassword: string
+  ): Promise<boolean> {
+    return bcrypt.compare(password, hashedPassword);
   }
 }
