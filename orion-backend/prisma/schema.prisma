@@ -17,6 +17,13 @@ model User {
   favorites Favorite[]
   history   History[]
   tabs      Tab[]
+  quickNotes     QuickNote[]
+  quickTasks     QuickTask[]
+  focusSessions  FocusSession[]
+  blockedSites   BlockedSite[]
+  browsingStats  BrowsingStats[]
+  siteVisits     SiteVisit[]
+  preferences    UserPreference?
 }
 
 model Favorite {
@@ -52,4 +59,82 @@ model Tab {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model QuickNote {
+  id        String   @id @default(cuid())
+  text      String
+  url       String
+  color     String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model QuickTask {
+  id        String   @id @default(cuid())
+  text      String
+  completed Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FocusSession {
+  id            String   @id @default(cuid())
+  durationMs    Int
+  elapsedMs     Int      @default(0)
+  completed     Boolean  @default(false)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model BlockedSite {
+  id     String @id @default(cuid())
+  domain String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([domain, userId])
+}
+
+model BrowsingStats {
+  id              String   @id @default(cuid())
+  date            DateTime @default(now()) @db.Date
+  minutesBrowsed  Int      @default(0)
+  sitesVisited    Int      @default(0)
+  trackersBlocked Int      @default(0)
+  dataSavedBytes  BigInt   @default(0)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([date, userId])
+}
+
+model SiteVisit {
+  id        String   @id @default(cuid())
+  domain    String
+  minutes   Int      @default(0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now()) @db.Date
+
+  @@unique([domain, userId, date])
+}
+
+model UserPreference {
+  id              String @id @default(cuid())
+  theme           String @default("dark")
+  defaultZoom     Int    @default(100)
+  blockTrackers   Boolean @default(true)
+  blockThirdPartyCookies Boolean @default(true)
+  antiFingerprint Boolean @default(true)
+  forceHttps      Boolean @default(true)
+  blockMining     Boolean @default(true)
+  userId          String @unique
+  user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

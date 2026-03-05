@@ -16,6 +16,11 @@ import voiceRoutes from "./routes/sync";
 import searchRoutes from "./routes/users";
 import userRoutes from "./routes/users";
 import prisma from "./config/prisma";
+import notesRoutes from "./routes/notesRoutes";
+import tasksRoutes from "./routes/taskRoutes";
+import focusRoutes from "./routes/focusRoutes";
+import statsRoutes from "./routes/statsRoutes";
+import preferencesRoutes from "./routes/preferencesRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +43,11 @@ app.use("/api/history", historyRoutes);
 app.use("/api/voice", voiceLimiter, voiceRoutes);
 app.use("/api/search", searchRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/notes", notesRoutes);
+app.use("/api/tasks", tasksRoutes);
+app.use("/api/focus", focusRoutes);
+app.use("/api/stats", statsRoutes);
+app.use("/api/preferences", preferencesRoutes);
 
 // Health Check
 app.get("/api/health", async (_req, res) => {

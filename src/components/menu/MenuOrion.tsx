@@ -292,7 +292,7 @@ export const BrowserMenu = ({
     };
     setNotes([note, ...notes]);
     setNewNote("");
-    toast({ title: "📝 Nota guardada" });
+    toast({ title: "Nota guardada" });
   };
 
   const deleteNote = (id: string) => {
@@ -324,7 +324,7 @@ export const BrowserMenu = ({
     if (!site || blockedSites.includes(site)) return;
     setBlockedSites([...blockedSites, site]);
     setNewBlockedSite("");
-    toast({ title: "🚫 Sitio bloqueado en Focus Mode", description: site });
+    toast({ title: "Sitio bloqueado en Focus Mode", description: site });
   };
 
   const removeBlockedSite = (site: string) => {
@@ -491,7 +491,7 @@ export const BrowserMenu = ({
                   desc="Capturar página completa o zona"
                   accent="sky"
                   onClick={() => {
-                    toast({ title: "📸 Modo captura activado", description: "Selecciona el área" });
+                    toast({ title: "Modo captura activado", description: "Selecciona el área" });
                     onClose();
                   }}
                 />
@@ -501,7 +501,7 @@ export const BrowserMenu = ({
                   desc="Leer sin distracciones"
                   accent="violet"
                   onClick={() => {
-                    toast({ title: "📖 Modo lectura activado" });
+                    toast({ title: "Modo lectura activado" });
                     onClose();
                   }}
                 />
@@ -511,7 +511,7 @@ export const BrowserMenu = ({
                   desc="Extraer colores de la página"
                   accent="rose"
                   onClick={() => {
-                    toast({ title: "🎨 Color picker activado", description: "Click en cualquier elemento" });
+                    toast({ title: "Color picker activado", description: "Click en cualquier elemento" });
                     onClose();
                   }}
                 />
@@ -521,7 +521,7 @@ export const BrowserMenu = ({
                   desc="Medir distancias en la web"
                   accent="amber"
                   onClick={() => {
-                    toast({ title: "📐 Modo medición activado" });
+                    toast({ title: "Modo medición activado" });
                     onClose();
                   }}
                 />
@@ -531,7 +531,7 @@ export const BrowserMenu = ({
                   desc="Extraer texto de imágenes"
                   accent="emerald"
                   onClick={() => {
-                    toast({ title: "🔍 OCR activado", description: "Selecciona una imagen" });
+                    toast({ title: "OCR activado", description: "Selecciona una imagen" });
                     onClose();
                   }}
                 />
@@ -541,7 +541,7 @@ export const BrowserMenu = ({
                   desc="Exportar página a PDF"
                   accent="cyan"
                   onClick={() => {
-                    toast({ title: "📄 Generando PDF…" });
+                    toast({ title: "Generando PDF…" });
                     onClose();
                   }}
                 />
@@ -551,7 +551,7 @@ export const BrowserMenu = ({
                   desc="Dibujar y subrayar contenido"
                   accent="orange"
                   onClick={() => {
-                    toast({ title: "✏️ Modo anotación activado" });
+                    toast({ title: "Modo anotación activado" });
                     onClose();
                   }}
                 />
@@ -561,7 +561,7 @@ export const BrowserMenu = ({
                   desc="Traducción automática completa"
                   accent="indigo"
                   onClick={() => {
-                    toast({ title: "🌐 Traduciendo página…" });
+                    toast({ title: "Traduciendo página…" });
                     onClose();
                   }}
                 />
@@ -686,7 +686,7 @@ export const BrowserMenu = ({
                   desc="Dos páginas lado a lado"
                   accent="cyan"
                   onClick={() => {
-                    toast({ title: "📐 Vista dividida activada" });
+                    toast({ title: "Vista dividida activada" });
                     onClose();
                   }}
                 />
@@ -696,7 +696,7 @@ export const BrowserMenu = ({
                   desc="Panel con segunda página"
                   accent="violet"
                   onClick={() => {
-                    toast({ title: "📌 Panel lateral abierto" });
+                    toast({ title: "Panel lateral abierto" });
                     onClose();
                   }}
                 />
@@ -716,7 +716,7 @@ export const BrowserMenu = ({
                   desc="Organizar pestañas por tema"
                   accent="emerald"
                   onClick={() => {
-                    toast({ title: "📂 Gestor de grupos abierto" });
+                    toast({ title: "Gestor de grupos abierto" });
                   }}
                 />
               </div>
@@ -734,7 +734,7 @@ export const BrowserMenu = ({
                       key={t.id}
                       onClick={() => {
                         setTheme(t.id);
-                        toast({ title: `🎨 Tema: ${t.label}` });
+                        toast({ title: `Tema: ${t.label}` });
                       }}
                       className={`flex-1 flex flex-col items-center gap-2 py-3 rounded-xl border transition-all duration-200 ${
                         theme === t.id
@@ -773,7 +773,7 @@ export const BrowserMenu = ({
                           setFocusTimer(min * 60 * 1000);
                           setFocusElapsed(0);
                           toast({
-                            title: `🧠 Focus: ${min} minutos`,
+                            title: `Focus: ${min} minutos`,
                             description: "Sitios distractores bloqueados",
                           });
                         }}
@@ -1001,7 +1001,7 @@ export const BrowserMenu = ({
                   desc="Video flotante mientras navegas"
                   accent="red"
                   onClick={() => {
-                    toast({ title: "🎬 PiP activado" });
+                    toast({ title: "PiP activado" });
                     onClose();
                   }}
                 />
@@ -1011,7 +1011,7 @@ export const BrowserMenu = ({
                   desc="Silenciar audio de esta página"
                   accent="amber"
                   onClick={() => {
-                    toast({ title: "🔇 Pestaña silenciada" });
+                    toast({ title: "Pestaña silenciada" });
                     onClose();
                   }}
                 />
@@ -1027,21 +1027,21 @@ export const BrowserMenu = ({
                   title="Galería de medios"
                   desc="Ver todas las imágenes/videos"
                   accent="emerald"
-                  onClick={() => toast({ title: "🖼️ Galería abierta" })}
+                  onClick={() => toast({ title: "Galería abierta" })}
                 />
                 <ToolCard
                   icon={<Music className="w-5 h-5 text-pink-400" />}
                   title="Detectar canción"
                   desc="Identifica la música que suena"
                   accent="pink"
-                  onClick={() => toast({ title: "🎵 Escuchando…", description: "Identificando canción" })}
+                  onClick={() => toast({ title: "Escuchando…", description: "Identificando canción" })}
                 />
                 <ToolCard
                   icon={<Download className="w-5 h-5 text-sky-400" />}
                   title="Descargar medios"
                   desc="Descargar videos e imágenes"
                   accent="sky"
-                  onClick={() => toast({ title: "⬇️ Analizando medios disponibles…" })}
+                  onClick={() => toast({ title: "Analizando medios disponibles…" })}
                 />
               </div>
             </MenuContent>
@@ -1057,7 +1057,7 @@ export const BrowserMenu = ({
                   desc="Examinar elementos y CSS"
                   accent="emerald"
                   onClick={() => {
-                    toast({ title: "🔍 Inspector abierto" });
+                    toast({ title: "Inspector abierto" });
                     onClose();
                   }}
                 />
@@ -1067,7 +1067,7 @@ export const BrowserMenu = ({
                   desc="JavaScript console"
                   accent="slate"
                   onClick={() => {
-                    toast({ title: "🖥️ Consola abierta" });
+                    toast({ title: "Consola abierta" });
                     onClose();
                   }}
                 />
@@ -1076,21 +1076,21 @@ export const BrowserMenu = ({
                   title="Red"
                   desc="Monitor de peticiones HTTP"
                   accent="cyan"
-                  onClick={() => toast({ title: "🌐 Network monitor abierto" })}
+                  onClick={() => toast({ title: "Network monitor abierto" })}
                 />
                 <ToolCard
                   icon={<Bug className="w-5 h-5 text-red-400" />}
                   title="Debugger"
                   desc="Depurador JavaScript"
                   accent="red"
-                  onClick={() => toast({ title: "🐞 Debugger abierto" })}
+                  onClick={() => toast({ title: "Debugger abierto" })}
                 />
                 <ToolCard
                   icon={<Activity className="w-5 h-5 text-violet-400" />}
                   title="Performance"
                   desc="Perfilar rendimiento"
                   accent="violet"
-                  onClick={() => toast({ title: "📊 Performance profiler abierto" })}
+                  onClick={() => toast({ title: "Performance profiler abierto" })}
                 />
                 <ToolCard
                   icon={<Smartphone className="w-5 h-5 text-amber-400" />}
@@ -1098,7 +1098,7 @@ export const BrowserMenu = ({
                   desc="Simular dispositivos móviles"
                   accent="amber"
                   onClick={() => {
-                    toast({ title: "📱 Vista responsiva activada" });
+                    toast({ title: "Vista responsiva activada" });
                     onClose();
                   }}
                 />
@@ -1216,13 +1216,13 @@ export const BrowserMenu = ({
                   icon={<Send className="w-4 h-4 text-emerald-400" />}
                   title="Enviar a mi teléfono"
                   desc="Continuar en otro dispositivo"
-                  onClick={() => toast({ title: "📱 Enlace enviado a tu teléfono" })}
+                  onClick={() => toast({ title: "Enlace enviado a tu teléfono" })}
                 />
                 <ShareOption
                   icon={<FileDown className="w-4 h-4 text-amber-400" />}
                   title="Guardar página completa"
                   desc="Descargar como archivo HTML"
-                  onClick={() => toast({ title: "💾 Página guardada" })}
+                  onClick={() => toast({ title: "Página guardada" })}
                 />
                 <ShareOption
                   icon={<Printer className="w-4 h-4 text-slate-400" />}
