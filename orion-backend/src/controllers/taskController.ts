@@ -1,20 +1,27 @@
 import { Request, Response } from "express";
 import { tasksService } from "../services/taskService";
 
+interface AuthRequest extends Request {
+  user: {
+    id: string;
+  };
+}
+
 export const tasksController = {
   async getAll(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const tasks = await tasksService.getAll(userId);
       res.json({ success: true, data: tasks });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 
   async create(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const { text } = req.body;
 
       if (!text) {
@@ -23,30 +30,33 @@ export const tasksController = {
 
       const task = await tasksService.create(userId, text);
       res.status(201).json({ success: true, data: task });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 
   async toggle(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const { id } = req.params;
       const task = await tasksService.toggle(id, userId);
       res.json({ success: true, data: task });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 
   async delete(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const { id } = req.params;
       await tasksService.delete(id, userId);
       res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 };

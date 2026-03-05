@@ -210,4 +210,99 @@ export const voiceService = {
   },
 };
 
+// ── Quick Notes ──
+export const notesService = {
+  getAll: async () => {
+    const response = await api.get('/notes');
+    return response.data.data;
+  },
+
+  create: async (data: { text: string; url: string; color: string }) => {
+    const response = await api.post('/notes', data);
+    return response.data.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/notes/${id}`);
+    return response.data;
+  },
+};
+
+// ── Quick Tasks ──
+export const tasksService = {
+  getAll: async () => {
+    const response = await api.get('/tasks');
+    return response.data.data;
+  },
+
+  create: async (text: string) => {
+    const response = await api.post('/tasks', { text });
+    return response.data.data;
+  },
+
+  toggle: async (id: string) => {
+    const response = await api.patch(`/tasks/${id}/toggle`);
+    return response.data.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/tasks/${id}`);
+    return response.data;
+  },
+};
+
+// ── Focus Mode ──
+export const focusService = {
+  getBlockedSites: async () => {
+    const response = await api.get('/focus/blocked-sites');
+    return response.data.data;
+  },
+
+  addBlockedSite: async (domain: string) => {
+    const response = await api.post('/focus/blocked-sites', { domain });
+    return response.data.data;
+  },
+
+  removeBlockedSite: async (id: string) => {
+    const response = await api.delete(`/focus/blocked-sites/${id}`);
+    return response.data;
+  },
+
+  startSession: async (durationMs: number) => {
+    const response = await api.post('/focus/sessions', { durationMs });
+    return response.data.data;
+  },
+
+  endSession: async (id: string, elapsedMs: number, completed: boolean) => {
+    const response = await api.patch(`/focus/sessions/${id}/end`, { elapsedMs, completed });
+    return response.data;
+  },
+};
+
+// ── Browsing Stats ──
+export const statsService = {
+  getToday: async () => {
+    const response = await api.get('/stats/today');
+    return response.data.data;
+  },
+
+  recordVisit: async (domain: string, minutes?: number) => {
+    const response = await api.post('/stats/visit', { domain, minutes });
+    return response.data;
+  },
+};
+
+// ── User Preferences ──
+export const preferencesService = {
+  get: async () => {
+    const response = await api.get('/preferences');
+    return response.data.data;
+  },
+
+  update: async (data: Record<string, unknown>) => {
+    const response = await api.patch('/preferences', data);
+    return response.data.data;
+  },
+};
+
 export default api;

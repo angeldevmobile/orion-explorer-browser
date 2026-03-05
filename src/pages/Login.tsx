@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import TermsOfService from "@/components/politics/Terms";
 import PrivacyPolicy from "@/components/politics/Privacity";
 

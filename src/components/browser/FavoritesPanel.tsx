@@ -1,5 +1,5 @@
 import { Star, Trash2, ExternalLink } from "lucide-react";
-import { useFavorites } from "@/contexts/FavoritesContext";
+import { useFavorites } from "@/hooks/useFavorite";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,

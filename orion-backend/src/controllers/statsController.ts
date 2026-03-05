@@ -1,10 +1,16 @@
 import { Request, Response } from "express";
 import { statsService } from "../services/statsService";
 
+interface AuthRequest extends Request {
+  user: {
+    id: string;
+  };
+}
+
 export const statsController = {
   async getTodayStats(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const stats = await statsService.getTodayStats(userId);
       const topSites = await statsService.getTopSites(userId);
       const hourlyUsage = await statsService.getHourlyUsage(userId);
@@ -18,19 +24,23 @@ export const statsController = {
           hourlyUsage,
         },
       });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 
   async recordVisit(req: Request, res: Response) {
     try {
-      const userId = (req as any).user.id;
+      const userId = (req as AuthRequest).user.id;
       const { domain, minutes } = req.body;
       await statsService.recordSiteVisit(userId, domain, minutes || 1);
       res.json({ success: true });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ success: false, error: message });
     }
   },
 };

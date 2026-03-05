@@ -24,6 +24,8 @@ import { WebView } from "./WebView";
 import { WindowControls } from "./WindowControls";
 import { voiceService } from "@/services/voiceService";
 import { processVoiceQuery } from "@/services/geminiClient";
+import { FocusBlockedPage } from "@/pages/FocusBlockedPage";
+import { useFocusBlocker } from "@/hooks/useFocusBlocker";
 
 interface Tab {
   id: string;
@@ -64,15 +66,31 @@ export const BrowserWindow = () => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(100);
-  const { toast } = useToast();
 
+  // ── Focus Mode state (compartido con BrowserMenu) ──
+  const [focusActive, setFocusActive] = useState(false);
+  const [focusTimeRemaining, setFocusTimeRemaining] = useState("");
+  const [focusBlockedSites, setFocusBlockedSites] = useState<{ id: string; domain: string }[]>([]);
+
+  // ── Declarar activeTab ANTES de useFocusBlocker ──
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isAuthenticated = authService.isAuthenticated();
+
+  // ── Focus blocker (ahora activeTab ya existe) ──
+  const { isBlocked, blockedDomain } = useFocusBlocker({
+    isActive: focusActive,
+    blockedSites: focusBlockedSites,
+    currentUrl: activeTab?.url || "",
+  });
+
+  const { toast } = useToast();
 
   useEffect(() => {
     loadTabs();
     loadRecentSearches();
   }, []);
+
+  // ...existing code... (todo el resto de hooks, handlers, etc. sin cambios)
 
   useEffect(() => {
     if (voiceState !== "listening") return;
@@ -375,7 +393,6 @@ export const BrowserWindow = () => {
             />
           ))}
 
-          {/* New tab button */}
           <button
             onClick={handleNewTab}
             className="flex-shrink-0 w-8 h-8 mb-0.5 rounded-lg flex items-center justify-center text-slate-600 hover:text-cyan-400 hover:bg-white/[0.04] transition-all duration-200"
@@ -383,7 +400,6 @@ export const BrowserWindow = () => {
             <Plus className="h-4 w-4" />
           </button>
 
-          {/* Spacer */}
           <div className="flex-1" />
         </div>
 
@@ -410,7 +426,6 @@ export const BrowserWindow = () => {
             <FavoritesPanel onNavigate={handleNavigate} />
             <ThemeSelector />
 
-            {/* ═══ Menu Button ═══ */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
@@ -428,7 +443,13 @@ export const BrowserWindow = () => {
 
       {/* ═══ Content ═══ */}
       <div className="flex-1 overflow-hidden relative bg-[#0a0e1a]">
-        {showWebView ? (
+        {isBlocked ? (
+          <FocusBlockedPage
+            domain={blockedDomain || ""}
+            timeRemaining={focusTimeRemaining}
+            onGoBack={() => handleNavigate("orion://newtab")}
+          />
+        ) : showWebView ? (
           <WebView
             url={activeTab!.url}
             onTitleUpdate={(title) => updateActiveTab("title", title)}
@@ -460,6 +481,11 @@ export const BrowserWindow = () => {
         currentUrl={activeTab?.url || ""}
         currentZoom={currentZoom}
         onZoomChange={setCurrentZoom}
+        onFocusChange={(active, sites, timeRemaining) => {
+          setFocusActive(active);
+          setFocusBlockedSites(sites);
+          setFocusTimeRemaining(timeRemaining);
+        }}
       />
     </div>
   );

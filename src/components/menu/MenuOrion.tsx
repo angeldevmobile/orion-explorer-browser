@@ -1,15 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  // Navigation & Core
   Plus,
   Copy,
-  Scissors,
-  ClipboardPaste,
   History,
   Download,
   Bookmark,
   Settings,
-  // Tools
   Sparkles,
   Wand2,
   ScanLine,
@@ -20,80 +16,56 @@ import {
   Code2,
   Terminal,
   Bug,
-  // Privacy & Security
   Shield,
   ShieldCheck,
   Eye,
-  EyeOff,
   Lock,
   Fingerprint,
   Trash2,
   Cookie,
-  // Media & Content
   Image,
   Camera,
   Video,
   Music,
-  Volume2,
   VolumeX,
   Cast,
   MonitorPlay,
-  // Productivity
-  Timer,
   Clock,
-  CalendarDays,
   ListTodo,
   StickyNote,
   Brain,
   BarChart3,
   Activity,
-  Target,
-  // Layout & View
   Maximize2,
-  Minimize2,
-  SplitSquareVertical,
   Columns,
   PanelLeft,
   Layers,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
   Sun,
   Moon,
   Monitor,
-  // Share & Social
   Share2,
   QrCode,
   Send,
   Mail,
-  Link2,
-  ExternalLink,
-  // Files
-  FolderOpen,
-  Save,
-  Printer,
   FileDown,
-  FileUp,
-  // Misc
+  Printer,
   HelpCircle,
   Info,
-  MessageSquare,
-  Heart,
   Zap,
   Flame,
   Globe,
   Search,
   ChevronRight,
-  ChevronDown,
   X,
   AlertTriangle,
   Wifi,
-  WifiOff,
   Smartphone,
-  Laptop,
   Keyboard,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useMenuData } from "@/hooks/useMenuData";
 
 /* ═══════════════════════════════════════════
    TYPES
@@ -105,6 +77,11 @@ interface BrowserMenuProps {
   currentUrl: string;
   currentZoom?: number;
   onZoomChange?: (zoom: number) => void;
+  onFocusChange?: (
+    active: boolean,
+    sites: { id: string; domain: string }[],
+    timeRemaining: string
+  ) => void;
 }
 
 interface MenuSection {
@@ -115,38 +92,6 @@ interface MenuSection {
   badgeColor?: string;
 }
 
-/* ═══════════════════════════════════════════
-   FOCUS STATS (mock — replace with real data)
-   ═══════════════════════════════════════════ */
-interface FocusStats {
-  todayMinutes: number;
-  sitesVisited: number;
-  topSite: string;
-  topSiteMinutes: number;
-  trackersBlocked: number;
-  dataSaved: string;
-}
-
-const MOCK_STATS: FocusStats = {
-  todayMinutes: 127,
-  sitesVisited: 34,
-  topSite: "github.com",
-  topSiteMinutes: 42,
-  trackersBlocked: 243,
-  dataSaved: "18.4 MB",
-};
-
-/* ═══════════════════════════════════════════
-   NOTES (persisted in localStorage)
-   ═══════════════════════════════════════════ */
-interface QuickNote {
-  id: string;
-  text: string;
-  url: string;
-  timestamp: number;
-  color: string;
-}
-
 const NOTE_COLORS = [
   "from-amber-500/15 to-yellow-500/10 border-amber-500/20",
   "from-cyan-500/15 to-teal-500/10 border-cyan-500/20",
@@ -155,22 +100,9 @@ const NOTE_COLORS = [
   "from-emerald-500/15 to-green-500/10 border-emerald-500/20",
 ];
 
-/* ═══════════════════════════════════════════
-   TASK TYPES
-   ═══════════════════════════════════════════ */
-interface QuickTask {
-  id: string;
-  text: string;
-  completed: boolean;
-  timestamp: number;
-}
-
-/* ═══════════════════════════════════════════
-   MENU SECTIONS CONFIG
-   ═══════════════════════════════════════════ */
 const MENU_SECTIONS: MenuSection[] = [
   { id: "tools", label: "Herramientas", icon: <Wand2 className="w-4 h-4" /> },
-  { id: "privacy", label: "Privacidad", icon: <Shield className="w-4 h-4" />, badge: "243", badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  { id: "privacy", label: "Privacidad", icon: <Shield className="w-4 h-4" /> },
   { id: "workspace", label: "Espacio de trabajo", icon: <Layers className="w-4 h-4" /> },
   { id: "focus", label: "Focus Mode", icon: <Brain className="w-4 h-4" />, badge: "Nuevo", badgeColor: "bg-cyan-500/15 text-cyan-400 border-cyan-500/20" },
   { id: "notes", label: "Notas rápidas", icon: <StickyNote className="w-4 h-4" /> },
@@ -192,51 +124,56 @@ export const BrowserMenu = ({
   currentUrl,
   currentZoom = 100,
   onZoomChange,
+  onFocusChange,
 }: BrowserMenuProps) => {
   const [activeSection, setActiveSection] = useState<string>("tools");
-  const [notes, setNotes] = useState<QuickNote[]>([]);
-  const [tasks, setTasks] = useState<QuickTask[]>([]);
   const [newNote, setNewNote] = useState("");
   const [newTask, setNewTask] = useState("");
   const [focusMode, setFocusMode] = useState(false);
   const [focusTimer, setFocusTimer] = useState<number | null>(null);
   const [focusElapsed, setFocusElapsed] = useState(0);
-  const [blockedSites, setBlockedSites] = useState<string[]>(["twitter.com", "reddit.com", "instagram.com"]);
+  const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
   const [newBlockedSite, setNewBlockedSite] = useState("");
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
   const [searchMenu, setSearchMenu] = useState("");
 
   const menuRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Load notes & tasks from localStorage
-  useEffect(() => {
-    try {
-      const savedNotes = localStorage.getItem("orion-quick-notes");
-      if (savedNotes) setNotes(JSON.parse(savedNotes));
-      const savedTasks = localStorage.getItem("orion-quick-tasks");
-      if (savedTasks) setTasks(JSON.parse(savedTasks));
-      const savedBlocked = localStorage.getItem("orion-blocked-sites");
-      if (savedBlocked) setBlockedSites(JSON.parse(savedBlocked));
-    } catch {
-      // Ignore localStorage errors
+  const formatTimer = (ms: number) => {
+    const total = Math.ceil(ms / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // ── Real data from backend via hook ──
+  const {
+    loading,
+    notes,
+    tasks,
+    blockedSites,
+    stats,
+    prefs,
+    addNote,
+    deleteNote,
+    addTask,
+    toggleTask,
+    deleteTask,
+    addBlockedSite,
+    removeBlockedSite,
+    startFocusSession,
+    endFocusSession,
+    updatePreference,
+  } = useMenuData(isOpen);
+
+  // Dynamic badge for privacy section based on real stats
+  const privacyBadge = stats?.trackersBlocked?.toString() || "0";
+  const dynamicSections = MENU_SECTIONS.map((s) => {
+    if (s.id === "privacy") {
+      return { ...s, badge: privacyBadge, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" };
     }
-  }, []);
-
-  // Save notes
-  useEffect(() => {
-    localStorage.setItem("orion-quick-notes", JSON.stringify(notes));
-  }, [notes]);
-
-  // Save tasks
-  useEffect(() => {
-    localStorage.setItem("orion-quick-tasks", JSON.stringify(tasks));
-  }, [tasks]);
-
-  // Save blocked sites
-  useEffect(() => {
-    localStorage.setItem("orion-blocked-sites", JSON.stringify(blockedSites));
-  }, [blockedSites]);
+    return s;
+  });
 
   // Focus timer
   useEffect(() => {
@@ -246,6 +183,9 @@ export const BrowserMenu = ({
         setFocusElapsed((prev) => {
           if (prev + 1000 >= focusTimer) {
             setFocusMode(false);
+            if (focusSessionId) {
+              endFocusSession(focusSessionId, focusTimer, true);
+            }
             toast({ title: "🧠 Sesión de focus terminada", description: "¡Buen trabajo! Toma un descanso." });
             return 0;
           }
@@ -254,7 +194,7 @@ export const BrowserMenu = ({
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [focusMode, focusTimer, toast]);
+  }, [focusMode, focusTimer, focusSessionId, endFocusSession, toast]);
 
   // Close on Escape
   useEffect(() => {
@@ -278,76 +218,145 @@ export const BrowserMenu = ({
     return () => document.removeEventListener("mousedown", handle);
   }, [isOpen, onClose]);
 
+  // ── Notificar cambios de focus al parent ──
+  useEffect(() => {
+    if (onFocusChange) {
+      const remaining =
+        focusMode && focusTimer ? formatTimer(focusTimer - focusElapsed) : "";
+      onFocusChange(focusMode, blockedSites, remaining);
+    }
+  }, [focusMode, focusElapsed, focusTimer, blockedSites, onFocusChange]);
+
   if (!isOpen) return null;
 
-  /* ── Helpers ── */
-  const addNote = () => {
+  /* ── Handlers using real API ── */
+  const handleAddNote = async () => {
     if (!newNote.trim()) return;
-    const note: QuickNote = {
-      id: Date.now().toString(),
-      text: newNote.trim(),
-      url: currentUrl,
-      timestamp: Date.now(),
-      color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
-    };
-    setNotes([note, ...notes]);
-    setNewNote("");
-    toast({ title: "Nota guardada" });
+    try {
+      const color = NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)];
+      await addNote(newNote.trim(), currentUrl, color);
+      setNewNote("");
+      toast({ title: "Nota guardada" });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const deleteNote = (id: string) => {
-    setNotes(notes.filter((n) => n.id !== id));
+  const handleDeleteNote = async (id: string) => {
+    try {
+      await deleteNote(id);
+    } catch (err: unknown) {
+      toast({ title: "Error al eliminar nota", description: getErrorMessage(err) });
+    }
   };
 
-  const addTask = () => {
+  const handleAddTask = async () => {
     if (!newTask.trim()) return;
-    const task: QuickTask = {
-      id: Date.now().toString(),
-      text: newTask.trim(),
-      completed: false,
-      timestamp: Date.now(),
-    };
-    setTasks([task, ...tasks]);
-    setNewTask("");
+    try {
+      await addTask(newTask.trim());
+      setNewTask("");
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)));
+  const handleToggleTask = async (id: string) => {
+    try {
+      await toggleTask(id);
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter((t) => t.id !== id));
+  const handleDeleteTask = async (id: string) => {
+    try {
+      await deleteTask(id);
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const addBlockedSite = () => {
+  const handleAddBlockedSite = async () => {
     const site = newBlockedSite.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-    if (!site || blockedSites.includes(site)) return;
-    setBlockedSites([...blockedSites, site]);
-    setNewBlockedSite("");
-    toast({ title: "Sitio bloqueado en Focus Mode", description: site });
+    if (!site) return;
+    try {
+      await addBlockedSite(site);
+      setNewBlockedSite("");
+      toast({ title: "Sitio bloqueado en Focus Mode", description: site });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const removeBlockedSite = (site: string) => {
-    setBlockedSites(blockedSites.filter((s) => s !== site));
+  const handleRemoveBlockedSite = async (id: string) => {
+    try {
+      await removeBlockedSite(id);
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
-  const formatTimer = (ms: number) => {
-    const total = Math.ceil(ms / 1000);
-    const m = Math.floor(total / 60);
-    const s = total % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  const handleStartFocus = async (minutes: number) => {
+    try {
+      const durationMs = minutes * 60 * 1000;
+      const session = await startFocusSession(durationMs);
+      setFocusMode(true);
+      setFocusTimer(durationMs);
+      setFocusElapsed(0);
+      setFocusSessionId(session.id);
+      toast({
+        title: `Focus: ${minutes} minutos`,
+        description: "Sitios distractores bloqueados",
+      });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
+  };
+
+  const handleStopFocus = async () => {
+    if (focusSessionId) {
+      await endFocusSession(focusSessionId, focusElapsed, false).catch(() => {});
+    }
+    setFocusMode(false);
+    setFocusElapsed(0);
+    setFocusSessionId(null);
+    toast({ title: "Focus mode desactivado" });
+  };
+
+  const handleUpdatePrivacyPref = async (key: string, value: boolean) => {
+    try {
+      await updatePreference(key, value);
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
+  };
+
+  const handleThemeChange = async (themeId: string) => {
+    try {
+      await updatePreference("theme", themeId);
+      toast({ title: `Tema: ${themeId}` });
+    } catch (err: unknown) {
+      toast({ title: "Error", description: getErrorMessage(err) });
+    }
   };
 
   const completedTasks = tasks.filter((t) => t.completed).length;
 
-  // Filter sections by search
   const filteredSections = searchMenu
-    ? MENU_SECTIONS.filter(
+    ? dynamicSections.filter(
         (s) =>
           s.label.toLowerCase().includes(searchMenu.toLowerCase()) ||
           s.id.toLowerCase().includes(searchMenu.toLowerCase())
       )
-    : MENU_SECTIONS;
+    : dynamicSections;
+
+  // ── Stats from real data ──
+  const todayMinutes = stats?.minutesBrowsed || 0;
+  const sitesVisited = stats?.sitesVisited || 0;
+  const trackersBlocked = stats?.trackersBlocked || 0;
+  const dataSaved = stats ? `${(parseInt(stats.dataSavedBytes) / (1024 * 1024)).toFixed(1)} MB` : "0 MB";
+  const topSite = stats?.topSites?.[0];
+  const hourlyUsage = stats?.hourlyUsage || [];
 
   /* ═══════════════════════════════════════════
      RENDER
@@ -376,7 +385,6 @@ export const BrowserMenu = ({
               </div>
             </div>
 
-            {/* Search within menu */}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600" />
               <input
@@ -392,26 +400,10 @@ export const BrowserMenu = ({
           {/* Quick Actions Row */}
           <div className="px-3 py-3 border-b border-white/[0.06]">
             <div className="grid grid-cols-4 gap-1.5">
-              <QuickActionBtn
-                icon={<Plus className="w-3.5 h-3.5" />}
-                label="Pestaña"
-                onClick={() => { toast({ title: "Nueva pestaña abierta" }); onClose(); }}
-              />
-              <QuickActionBtn
-                icon={<History className="w-3.5 h-3.5" />}
-                label="Historial"
-                onClick={() => { onNavigate("orion://history"); onClose(); }}
-              />
-              <QuickActionBtn
-                icon={<Download className="w-3.5 h-3.5" />}
-                label="Descargas"
-                onClick={() => { onNavigate("orion://downloads"); onClose(); }}
-              />
-              <QuickActionBtn
-                icon={<Bookmark className="w-3.5 h-3.5" />}
-                label="Favoritos"
-                onClick={() => { onNavigate("orion://bookmarks"); onClose(); }}
-              />
+              <QuickActionBtn icon={<Plus className="w-3.5 h-3.5" />} label="Pestaña" onClick={() => { toast({ title: "Nueva pestaña abierta" }); onClose(); }} />
+              <QuickActionBtn icon={<History className="w-3.5 h-3.5" />} label="Historial" onClick={() => { onNavigate("orion://history"); onClose(); }} />
+              <QuickActionBtn icon={<Download className="w-3.5 h-3.5" />} label="Descargas" onClick={() => { onNavigate("orion://downloads"); onClose(); }} />
+              <QuickActionBtn icon={<Bookmark className="w-3.5 h-3.5" />} label="Favoritos" onClick={() => { onNavigate("orion://bookmarks"); onClose(); }} />
             </div>
           </div>
 
@@ -455,11 +447,7 @@ export const BrowserMenu = ({
                 {formatTimer(focusTimer! - focusElapsed)}
               </p>
               <button
-                onClick={() => {
-                  setFocusMode(false);
-                  setFocusElapsed(0);
-                  toast({ title: "Focus mode desactivado" });
-                }}
+                onClick={handleStopFocus}
                 className="text-[10px] text-violet-400/60 hover:text-violet-400 mt-1 transition-colors"
               >
                 Detener
@@ -481,118 +469,42 @@ export const BrowserMenu = ({
 
         {/* ═══ RIGHT CONTENT ═══ */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+
+          {/* Loading state */}
+          {loading && (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+            </div>
+          )}
+
           {/* ── TOOLS ── */}
-          {activeSection === "tools" && (
+          {!loading && activeSection === "tools" && (
             <MenuContent title="Herramientas" subtitle="Potencia tu navegación">
               <div className="grid grid-cols-2 gap-2">
-                <ToolCard
-                  icon={<Camera className="w-5 h-5 text-sky-400" />}
-                  title="Captura de pantalla"
-                  desc="Capturar página completa o zona"
-                  accent="sky"
-                  onClick={() => {
-                    toast({ title: "Modo captura activado", description: "Selecciona el área" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Sparkles className="w-5 h-5 text-violet-400" />}
-                  title="Modo lectura"
-                  desc="Leer sin distracciones"
-                  accent="violet"
-                  onClick={() => {
-                    toast({ title: "Modo lectura activado" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Palette className="w-5 h-5 text-rose-400" />}
-                  title="Color Picker"
-                  desc="Extraer colores de la página"
-                  accent="rose"
-                  onClick={() => {
-                    toast({ title: "Color picker activado", description: "Click en cualquier elemento" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Ruler className="w-5 h-5 text-amber-400" />}
-                  title="Medidor de página"
-                  desc="Medir distancias en la web"
-                  accent="amber"
-                  onClick={() => {
-                    toast({ title: "Modo medición activado" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<ScanLine className="w-5 h-5 text-emerald-400" />}
-                  title="Texto de imagen (OCR)"
-                  desc="Extraer texto de imágenes"
-                  accent="emerald"
-                  onClick={() => {
-                    toast({ title: "OCR activado", description: "Selecciona una imagen" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<FileText className="w-5 h-5 text-cyan-400" />}
-                  title="Guardar como PDF"
-                  desc="Exportar página a PDF"
-                  accent="cyan"
-                  onClick={() => {
-                    toast({ title: "Generando PDF…" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<PenTool className="w-5 h-5 text-orange-400" />}
-                  title="Anotar en página"
-                  desc="Dibujar y subrayar contenido"
-                  accent="orange"
-                  onClick={() => {
-                    toast({ title: "Modo anotación activado" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Globe className="w-5 h-5 text-indigo-400" />}
-                  title="Traducir página"
-                  desc="Traducción automática completa"
-                  accent="indigo"
-                  onClick={() => {
-                    toast({ title: "Traduciendo página…" });
-                    onClose();
-                  }}
-                />
+                <ToolCard icon={<Camera className="w-5 h-5 text-sky-400" />} title="Captura de pantalla" desc="Capturar página completa o zona" accent="sky" onClick={() => { toast({ title: "Modo captura activado", description: "Selecciona el área" }); onClose(); }} />
+                <ToolCard icon={<Sparkles className="w-5 h-5 text-violet-400" />} title="Modo lectura" desc="Leer sin distracciones" accent="violet" onClick={() => { toast({ title: "Modo lectura activado" }); onClose(); }} />
+                <ToolCard icon={<Palette className="w-5 h-5 text-rose-400" />} title="Color Picker" desc="Extraer colores de la página" accent="rose" onClick={() => { toast({ title: "Color picker activado", description: "Click en cualquier elemento" }); onClose(); }} />
+                <ToolCard icon={<Ruler className="w-5 h-5 text-amber-400" />} title="Medidor de página" desc="Medir distancias en la web" accent="amber" onClick={() => { toast({ title: "Modo medición activado" }); onClose(); }} />
+                <ToolCard icon={<ScanLine className="w-5 h-5 text-emerald-400" />} title="Texto de imagen (OCR)" desc="Extraer texto de imágenes" accent="emerald" onClick={() => { toast({ title: "OCR activado", description: "Selecciona una imagen" }); onClose(); }} />
+                <ToolCard icon={<FileText className="w-5 h-5 text-cyan-400" />} title="Guardar como PDF" desc="Exportar página a PDF" accent="cyan" onClick={() => { toast({ title: "Generando PDF…" }); onClose(); }} />
+                <ToolCard icon={<PenTool className="w-5 h-5 text-orange-400" />} title="Anotar en página" desc="Dibujar y subrayar contenido" accent="orange" onClick={() => { toast({ title: "Modo anotación activado" }); onClose(); }} />
+                <ToolCard icon={<Globe className="w-5 h-5 text-indigo-400" />} title="Traducir página" desc="Traducción automática completa" accent="indigo" onClick={() => { toast({ title: "Traduciendo página…" }); onClose(); }} />
               </div>
 
               {/* Zoom control */}
               <div className="mt-5 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
                 <p className="text-xs font-bold text-slate-300 mb-3">Zoom de página</p>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => onZoomChange?.(Math.max(50, currentZoom - 10))}
-                    className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all"
-                  >
+                  <button onClick={() => onZoomChange?.(Math.max(50, currentZoom - 10))} className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all">
                     <ZoomOut className="w-4 h-4" />
                   </button>
                   <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] relative">
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-400 transition-all duration-200"
-                      style={{ width: `${((currentZoom - 50) / 150) * 100}%` }}
-                    />
+                    <div className="absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-cyan-500 to-teal-400 transition-all duration-200" style={{ width: `${((currentZoom - 50) / 150) * 100}%` }} />
                   </div>
-                  <button
-                    onClick={() => onZoomChange?.(Math.min(200, currentZoom + 10))}
-                    className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all"
-                  >
+                  <button onClick={() => onZoomChange?.(Math.min(200, currentZoom + 10))} className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all">
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <button
-                    onClick={() => onZoomChange?.(100)}
-                    className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-xs text-slate-300 font-mono font-bold hover:bg-white/[0.08] transition-all min-w-[48px] text-center"
-                  >
+                  <button onClick={() => onZoomChange?.(100)} className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-xs text-slate-300 font-mono font-bold hover:bg-white/[0.08] transition-all min-w-[48px] text-center">
                     {currentZoom}%
                   </button>
                 </div>
@@ -601,9 +513,8 @@ export const BrowserMenu = ({
           )}
 
           {/* ── PRIVACY ── */}
-          {activeSection === "privacy" && (
+          {!loading && activeSection === "privacy" && (
             <MenuContent title="Privacidad & Seguridad" subtitle="Tu datos, tu control">
-              {/* Status card */}
               <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 via-green-500/5 to-emerald-500/10 border border-emerald-500/15 mb-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center">
@@ -611,59 +522,26 @@ export const BrowserMenu = ({
                   </div>
                   <div>
                     <p className="text-sm font-bold text-emerald-400">Protección activa</p>
-                    <p className="text-[11px] text-slate-500">
-                      {MOCK_STATS.trackersBlocked} rastreadores bloqueados hoy
-                    </p>
+                    <p className="text-[11px] text-slate-500">{trackersBlocked} rastreadores bloqueados hoy</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <MiniStat label="Trackers" value={MOCK_STATS.trackersBlocked.toString()} color="emerald" />
+                  <MiniStat label="Trackers" value={trackersBlocked.toString()} color="emerald" />
                   <MiniStat label="Cookies" value="89" color="amber" />
-                  <MiniStat label="Datos ahorrados" value={MOCK_STATS.dataSaved} color="cyan" />
+                  <MiniStat label="Datos ahorrados" value={dataSaved} color="cyan" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <PrivacyToggle
-                  icon={<Eye className="w-4 h-4" />}
-                  title="Bloquear rastreadores"
-                  desc="Evita que los sitios te sigan"
-                  defaultOn
-                />
-                <PrivacyToggle
-                  icon={<Cookie className="w-4 h-4" />}
-                  title="Bloquear cookies de terceros"
-                  desc="Solo cookies del sitio actual"
-                  defaultOn
-                />
-                <PrivacyToggle
-                  icon={<Fingerprint className="w-4 h-4" />}
-                  title="Anti-fingerprinting"
-                  desc="Evita la identificación por huella digital"
-                  defaultOn
-                />
-                <PrivacyToggle
-                  icon={<Lock className="w-4 h-4" />}
-                  title="Forzar HTTPS"
-                  desc="Conexiones siempre cifradas"
-                  defaultOn
-                />
-                <PrivacyToggle
-                  icon={<AlertTriangle className="w-4 h-4" />}
-                  title="Bloquear scripts de minería"
-                  desc="Prevenir cryptojacking"
-                  defaultOn
-                />
+                <PrivacyToggle icon={<Eye className="w-4 h-4" />} title="Bloquear rastreadores" desc="Evita que los sitios te sigan" initialOn={prefs?.blockTrackers ?? true} onChange={(on) => handleUpdatePrivacyPref("blockTrackers", on)} />
+                <PrivacyToggle icon={<Cookie className="w-4 h-4" />} title="Bloquear cookies de terceros" desc="Solo cookies del sitio actual" initialOn={prefs?.blockThirdPartyCookies ?? true} onChange={(on) => handleUpdatePrivacyPref("blockThirdPartyCookies", on)} />
+                <PrivacyToggle icon={<Fingerprint className="w-4 h-4" />} title="Anti-fingerprinting" desc="Evita la identificación por huella digital" initialOn={prefs?.antiFingerprint ?? true} onChange={(on) => handleUpdatePrivacyPref("antiFingerprint", on)} />
+                <PrivacyToggle icon={<Lock className="w-4 h-4" />} title="Forzar HTTPS" desc="Conexiones siempre cifradas" initialOn={prefs?.forceHttps ?? true} onChange={(on) => handleUpdatePrivacyPref("forceHttps", on)} />
+                <PrivacyToggle icon={<AlertTriangle className="w-4 h-4" />} title="Bloquear scripts de minería" desc="Prevenir cryptojacking" initialOn={prefs?.blockMining ?? true} onChange={(on) => handleUpdatePrivacyPref("blockMining", on)} />
               </div>
 
-              {/* Clear data */}
               <div className="mt-4 p-4 rounded-xl bg-red-500/[0.04] border border-red-500/10">
-                <button
-                  onClick={() => {
-                    toast({ title: "🗑️ Datos de navegación eliminados" });
-                  }}
-                  className="flex items-center gap-3 w-full text-left group"
-                >
+                <button onClick={() => toast({ title: "🗑️ Datos de navegación eliminados" })} className="flex items-center gap-3 w-full text-left group">
                   <div className="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/15 flex items-center justify-center group-hover:bg-red-500/20 transition-all">
                     <Trash2 className="w-4 h-4 text-red-400" />
                   </div>
@@ -677,48 +555,13 @@ export const BrowserMenu = ({
           )}
 
           {/* ── WORKSPACE ── */}
-          {activeSection === "workspace" && (
+          {!loading && activeSection === "workspace" && (
             <MenuContent title="Espacio de trabajo" subtitle="Organiza tu pantalla">
               <div className="grid grid-cols-2 gap-2">
-                <ToolCard
-                  icon={<Columns className="w-5 h-5 text-cyan-400" />}
-                  title="Vista dividida"
-                  desc="Dos páginas lado a lado"
-                  accent="cyan"
-                  onClick={() => {
-                    toast({ title: "Vista dividida activada" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<PanelLeft className="w-5 h-5 text-violet-400" />}
-                  title="Panel lateral"
-                  desc="Panel con segunda página"
-                  accent="violet"
-                  onClick={() => {
-                    toast({ title: "Panel lateral abierto" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Maximize2 className="w-5 h-5 text-amber-400" />}
-                  title="Pantalla completa"
-                  desc="Ocultar todo el UI"
-                  accent="amber"
-                  onClick={() => {
-                    document.documentElement.requestFullscreen?.();
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Layers className="w-5 h-5 text-emerald-400" />}
-                  title="Grupos de pestañas"
-                  desc="Organizar pestañas por tema"
-                  accent="emerald"
-                  onClick={() => {
-                    toast({ title: "Gestor de grupos abierto" });
-                  }}
-                />
+                <ToolCard icon={<Columns className="w-5 h-5 text-cyan-400" />} title="Vista dividida" desc="Dos páginas lado a lado" accent="cyan" onClick={() => { toast({ title: "Vista dividida activada" }); onClose(); }} />
+                <ToolCard icon={<PanelLeft className="w-5 h-5 text-violet-400" />} title="Panel lateral" desc="Panel con segunda página" accent="violet" onClick={() => { toast({ title: "Panel lateral abierto" }); onClose(); }} />
+                <ToolCard icon={<Maximize2 className="w-5 h-5 text-amber-400" />} title="Pantalla completa" desc="Ocultar todo el UI" accent="amber" onClick={() => { document.documentElement.requestFullscreen?.(); onClose(); }} />
+                <ToolCard icon={<Layers className="w-5 h-5 text-emerald-400" />} title="Grupos de pestañas" desc="Organizar pestañas por tema" accent="emerald" onClick={() => toast({ title: "Gestor de grupos abierto" })} />
               </div>
 
               {/* Theme selector */}
@@ -726,18 +569,15 @@ export const BrowserMenu = ({
                 <p className="text-xs font-bold text-slate-300 mb-3">Tema de colores</p>
                 <div className="flex gap-2">
                   {[
-                    { id: "dark" as const, icon: <Moon className="w-4 h-4" />, label: "Oscuro" },
-                    { id: "light" as const, icon: <Sun className="w-4 h-4" />, label: "Claro" },
-                    { id: "system" as const, icon: <Monitor className="w-4 h-4" />, label: "Sistema" },
+                    { id: "dark", icon: <Moon className="w-4 h-4" />, label: "Oscuro" },
+                    { id: "light", icon: <Sun className="w-4 h-4" />, label: "Claro" },
+                    { id: "system", icon: <Monitor className="w-4 h-4" />, label: "Sistema" },
                   ].map((t) => (
                     <button
                       key={t.id}
-                      onClick={() => {
-                        setTheme(t.id);
-                        toast({ title: `Tema: ${t.label}` });
-                      }}
+                      onClick={() => handleThemeChange(t.id)}
                       className={`flex-1 flex flex-col items-center gap-2 py-3 rounded-xl border transition-all duration-200 ${
-                        theme === t.id
+                        prefs?.theme === t.id
                           ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"
                           : "bg-white/[0.02] border-white/[0.06] text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]"
                       }`}
@@ -752,9 +592,8 @@ export const BrowserMenu = ({
           )}
 
           {/* ── FOCUS MODE ── */}
-          {activeSection === "focus" && (
+          {!loading && activeSection === "focus" && (
             <MenuContent title="Focus Mode" subtitle="Concentración sin distracciones">
-              {/* Timer start */}
               {!focusMode ? (
                 <div className="p-5 rounded-xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-indigo-500/10 border border-violet-500/15 mb-4">
                   <div className="flex items-center gap-3 mb-4">
@@ -768,15 +607,7 @@ export const BrowserMenu = ({
                     {[15, 25, 45, 60].map((min) => (
                       <button
                         key={min}
-                        onClick={() => {
-                          setFocusMode(true);
-                          setFocusTimer(min * 60 * 1000);
-                          setFocusElapsed(0);
-                          toast({
-                            title: `Focus: ${min} minutos`,
-                            description: "Sitios distractores bloqueados",
-                          });
-                        }}
+                        onClick={() => handleStartFocus(min)}
                         className="py-3 rounded-xl bg-violet-500/15 border border-violet-500/20 text-violet-300 font-bold text-sm hover:bg-violet-500/25 transition-all"
                       >
                         {min}m
@@ -791,14 +622,7 @@ export const BrowserMenu = ({
                     {formatTimer(focusTimer! - focusElapsed)}
                   </p>
                   <p className="text-xs text-violet-400/60 mb-4">Focus en progreso</p>
-                  <button
-                    onClick={() => {
-                      setFocusMode(false);
-                      setFocusElapsed(0);
-                      toast({ title: "Focus mode desactivado" });
-                    }}
-                    className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/15 text-xs text-red-400 hover:bg-red-500/20 transition-all"
-                  >
+                  <button onClick={handleStopFocus} className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/15 text-xs text-red-400 hover:bg-red-500/20 transition-all">
                     Detener sesión
                   </button>
                 </div>
@@ -807,35 +631,24 @@ export const BrowserMenu = ({
               {/* Blocked sites management */}
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
                 <p className="text-xs font-bold text-slate-300 mb-3">Sitios bloqueados durante focus</p>
-
                 <div className="flex gap-2 mb-3">
                   <input
                     type="text"
                     placeholder="Agregar sitio (ej: twitter.com)"
                     value={newBlockedSite}
                     onChange={(e) => setNewBlockedSite(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addBlockedSite()}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddBlockedSite()}
                     className="flex-1 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-violet-500/30"
                   />
-                  <button
-                    onClick={addBlockedSite}
-                    className="px-3 py-2 rounded-lg bg-violet-500/15 border border-violet-500/20 text-xs text-violet-400 font-medium hover:bg-violet-500/25 transition-all"
-                  >
+                  <button onClick={handleAddBlockedSite} className="px-3 py-2 rounded-lg bg-violet-500/15 border border-violet-500/20 text-xs text-violet-400 font-medium hover:bg-violet-500/25 transition-all">
                     Agregar
                   </button>
                 </div>
-
                 <div className="space-y-1.5 max-h-32 overflow-y-auto">
                   {blockedSites.map((site) => (
-                    <div
-                      key={site}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] group"
-                    >
-                      <span className="text-xs text-slate-400">{site}</span>
-                      <button
-                        onClick={() => removeBlockedSite(site)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all"
-                      >
+                    <div key={site.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] group">
+                      <span className="text-xs text-slate-400">{site.domain}</span>
+                      <button onClick={() => handleRemoveBlockedSite(site.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -846,22 +659,18 @@ export const BrowserMenu = ({
           )}
 
           {/* ── NOTES ── */}
-          {activeSection === "notes" && (
+          {!loading && activeSection === "notes" && (
             <MenuContent title="Notas rápidas" subtitle="Guarda ideas mientras navegas">
-              {/* New note input */}
               <div className="flex gap-2 mb-4">
                 <input
                   type="text"
                   placeholder="Escribe una nota…"
                   value={newNote}
                   onChange={(e) => setNewNote(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addNote()}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddNote()}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-amber-500/30"
                 />
-                <button
-                  onClick={addNote}
-                  className="px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/20 text-sm text-amber-400 font-medium hover:bg-amber-500/25 transition-all"
-                >
+                <button onClick={handleAddNote} className="px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/20 text-sm text-amber-400 font-medium hover:bg-amber-500/25 transition-all">
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
@@ -871,16 +680,10 @@ export const BrowserMenu = ({
               ) : (
                 <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
                   {notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className={`p-3 rounded-xl bg-gradient-to-br border group transition-all duration-200 hover:scale-[1.01] ${note.color}`}
-                    >
+                    <div key={note.id} className={`p-3 rounded-xl bg-gradient-to-br border group transition-all duration-200 hover:scale-[1.01] ${note.color || NOTE_COLORS[0]}`}>
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <p className="text-sm text-slate-300 leading-relaxed">{note.text}</p>
-                        <button
-                          onClick={() => deleteNote(note.id)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
-                        >
+                        <button onClick={() => handleDeleteNote(note.id)} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition-all flex-shrink-0 mt-0.5">
                           <X className="w-3 h-3" />
                         </button>
                       </div>
@@ -891,7 +694,7 @@ export const BrowserMenu = ({
                         </span>
                         <span className="text-[10px] text-slate-700">•</span>
                         <span className="text-[10px] text-slate-600">
-                          {new Date(note.timestamp).toLocaleString("es-ES", {
+                          {new Date(note.createdAt).toLocaleString("es-ES", {
                             day: "numeric",
                             month: "short",
                             hour: "2-digit",
@@ -907,41 +710,29 @@ export const BrowserMenu = ({
           )}
 
           {/* ── TASKS ── */}
-          {activeSection === "tasks" && (
+          {!loading && activeSection === "tasks" && (
             <MenuContent
               title="Tareas"
-              subtitle={
-                tasks.length > 0
-                  ? `${completedTasks}/${tasks.length} completadas`
-                  : "Organiza tu pendiente"
-              }
+              subtitle={tasks.length > 0 ? `${completedTasks}/${tasks.length} completadas` : "Organiza tu pendiente"}
             >
-              {/* New task input */}
               <div className="flex gap-2 mb-4">
                 <input
                   type="text"
                   placeholder="Nueva tarea…"
                   value={newTask}
                   onChange={(e) => setNewTask(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addTask()}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
                   className="flex-1 px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-cyan-500/30"
                 />
-                <button
-                  onClick={addTask}
-                  className="px-4 py-3 rounded-xl bg-cyan-500/15 border border-cyan-500/20 text-sm text-cyan-400 font-medium hover:bg-cyan-500/25 transition-all"
-                >
+                <button onClick={handleAddTask} className="px-4 py-3 rounded-xl bg-cyan-500/15 border border-cyan-500/20 text-sm text-cyan-400 font-medium hover:bg-cyan-500/25 transition-all">
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Progress bar */}
               {tasks.length > 0 && (
                 <div className="mb-4">
                   <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${(completedTasks / tasks.length) * 100}%` }}
-                    />
+                    <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full transition-all duration-500" style={{ width: `${(completedTasks / tasks.length) * 100}%` }} />
                   </div>
                 </div>
               )}
@@ -960,11 +751,9 @@ export const BrowserMenu = ({
                       }`}
                     >
                       <button
-                        onClick={() => toggleTask(task.id)}
+                        onClick={() => handleToggleTask(task.id)}
                         className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 flex-shrink-0 ${
-                          task.completed
-                            ? "bg-emerald-500 border-emerald-500"
-                            : "border-slate-600 hover:border-cyan-500"
+                          task.completed ? "bg-emerald-500 border-emerald-500" : "border-slate-600 hover:border-cyan-500"
                         }`}
                       >
                         {task.completed && (
@@ -973,15 +762,10 @@ export const BrowserMenu = ({
                           </svg>
                         )}
                       </button>
-                      <span className={`flex-1 text-sm transition-all ${
-                        task.completed ? "text-slate-600 line-through" : "text-slate-300"
-                      }`}>
+                      <span className={`flex-1 text-sm transition-all ${task.completed ? "text-slate-600 line-through" : "text-slate-300"}`}>
                         {task.text}
                       </span>
-                      <button
-                        onClick={() => deleteTask(task.id)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all flex-shrink-0"
-                      >
+                      <button onClick={() => handleDeleteTask(task.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 transition-all flex-shrink-0">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -992,131 +776,38 @@ export const BrowserMenu = ({
           )}
 
           {/* ── MEDIA CENTER ── */}
-          {activeSection === "media" && (
+          {!loading && activeSection === "media" && (
             <MenuContent title="Media Center" subtitle="Control multimedia">
               <div className="grid grid-cols-2 gap-2">
-                <ToolCard
-                  icon={<Video className="w-5 h-5 text-red-400" />}
-                  title="Picture in Picture"
-                  desc="Video flotante mientras navegas"
-                  accent="red"
-                  onClick={() => {
-                    toast({ title: "PiP activado" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<VolumeX className="w-5 h-5 text-amber-400" />}
-                  title="Silenciar pestaña"
-                  desc="Silenciar audio de esta página"
-                  accent="amber"
-                  onClick={() => {
-                    toast({ title: "Pestaña silenciada" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Cast className="w-5 h-5 text-indigo-400" />}
-                  title="Enviar a dispositivo"
-                  desc="Chromecast, TV u otro equipo"
-                  accent="indigo"
-                  onClick={() => toast({ title: "📺 Buscando dispositivos…" })}
-                />
-                <ToolCard
-                  icon={<Image className="w-5 h-5 text-emerald-400" />}
-                  title="Galería de medios"
-                  desc="Ver todas las imágenes/videos"
-                  accent="emerald"
-                  onClick={() => toast({ title: "Galería abierta" })}
-                />
-                <ToolCard
-                  icon={<Music className="w-5 h-5 text-pink-400" />}
-                  title="Detectar canción"
-                  desc="Identifica la música que suena"
-                  accent="pink"
-                  onClick={() => toast({ title: "Escuchando…", description: "Identificando canción" })}
-                />
-                <ToolCard
-                  icon={<Download className="w-5 h-5 text-sky-400" />}
-                  title="Descargar medios"
-                  desc="Descargar videos e imágenes"
-                  accent="sky"
-                  onClick={() => toast({ title: "Analizando medios disponibles…" })}
-                />
+                <ToolCard icon={<Video className="w-5 h-5 text-red-400" />} title="Picture in Picture" desc="Video flotante mientras navegas" accent="red" onClick={() => { toast({ title: "PiP activado" }); onClose(); }} />
+                <ToolCard icon={<VolumeX className="w-5 h-5 text-amber-400" />} title="Silenciar pestaña" desc="Silenciar audio de esta página" accent="amber" onClick={() => { toast({ title: "Pestaña silenciada" }); onClose(); }} />
+                <ToolCard icon={<Cast className="w-5 h-5 text-indigo-400" />} title="Enviar a dispositivo" desc="Chromecast, TV u otro equipo" accent="indigo" onClick={() => toast({ title: "📺 Buscando dispositivos…" })} />
+                <ToolCard icon={<Image className="w-5 h-5 text-emerald-400" />} title="Galería de medios" desc="Ver todas las imágenes/videos" accent="emerald" onClick={() => toast({ title: "Galería abierta" })} />
+                <ToolCard icon={<Music className="w-5 h-5 text-pink-400" />} title="Detectar canción" desc="Identifica la música que suena" accent="pink" onClick={() => toast({ title: "Escuchando…", description: "Identificando canción" })} />
+                <ToolCard icon={<Download className="w-5 h-5 text-sky-400" />} title="Descargar medios" desc="Descargar videos e imágenes" accent="sky" onClick={() => toast({ title: "Analizando medios disponibles…" })} />
               </div>
             </MenuContent>
           )}
 
           {/* ── DEVTOOLS ── */}
-          {activeSection === "devtools" && (
+          {!loading && activeSection === "devtools" && (
             <MenuContent title="Desarrollador" subtitle="Para creadores de la web">
               <div className="grid grid-cols-2 gap-2">
-                <ToolCard
-                  icon={<Code2 className="w-5 h-5 text-emerald-400" />}
-                  title="Inspector"
-                  desc="Examinar elementos y CSS"
-                  accent="emerald"
-                  onClick={() => {
-                    toast({ title: "Inspector abierto" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Terminal className="w-5 h-5 text-slate-300" />}
-                  title="Consola"
-                  desc="JavaScript console"
-                  accent="slate"
-                  onClick={() => {
-                    toast({ title: "Consola abierta" });
-                    onClose();
-                  }}
-                />
-                <ToolCard
-                  icon={<Wifi className="w-5 h-5 text-cyan-400" />}
-                  title="Red"
-                  desc="Monitor de peticiones HTTP"
-                  accent="cyan"
-                  onClick={() => toast({ title: "Network monitor abierto" })}
-                />
-                <ToolCard
-                  icon={<Bug className="w-5 h-5 text-red-400" />}
-                  title="Debugger"
-                  desc="Depurador JavaScript"
-                  accent="red"
-                  onClick={() => toast({ title: "Debugger abierto" })}
-                />
-                <ToolCard
-                  icon={<Activity className="w-5 h-5 text-violet-400" />}
-                  title="Performance"
-                  desc="Perfilar rendimiento"
-                  accent="violet"
-                  onClick={() => toast({ title: "Performance profiler abierto" })}
-                />
-                <ToolCard
-                  icon={<Smartphone className="w-5 h-5 text-amber-400" />}
-                  title="Vista responsiva"
-                  desc="Simular dispositivos móviles"
-                  accent="amber"
-                  onClick={() => {
-                    toast({ title: "Vista responsiva activada" });
-                    onClose();
-                  }}
-                />
+                <ToolCard icon={<Code2 className="w-5 h-5 text-emerald-400" />} title="Inspector" desc="Examinar elementos y CSS" accent="emerald" onClick={() => { toast({ title: "Inspector abierto" }); onClose(); }} />
+                <ToolCard icon={<Terminal className="w-5 h-5 text-slate-300" />} title="Consola" desc="JavaScript console" accent="slate" onClick={() => { toast({ title: "Consola abierta" }); onClose(); }} />
+                <ToolCard icon={<Wifi className="w-5 h-5 text-cyan-400" />} title="Red" desc="Monitor de peticiones HTTP" accent="cyan" onClick={() => toast({ title: "Network monitor abierto" })} />
+                <ToolCard icon={<Bug className="w-5 h-5 text-red-400" />} title="Debugger" desc="Depurador JavaScript" accent="red" onClick={() => toast({ title: "Debugger abierto" })} />
+                <ToolCard icon={<Activity className="w-5 h-5 text-violet-400" />} title="Performance" desc="Perfilar rendimiento" accent="violet" onClick={() => toast({ title: "Performance profiler abierto" })} />
+                <ToolCard icon={<Smartphone className="w-5 h-5 text-amber-400" />} title="Vista responsiva" desc="Simular dispositivos móviles" accent="amber" onClick={() => { toast({ title: "Vista responsiva activada" }); onClose(); }} />
               </div>
 
-              {/* View source */}
               <button
-                onClick={() => {
-                  onNavigate(`view-source:${currentUrl}`);
-                  onClose();
-                }}
+                onClick={() => { onNavigate(`view-source:${currentUrl}`); onClose(); }}
                 className="mt-4 w-full flex items-center gap-3 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] transition-all text-left group"
               >
                 <FileText className="w-5 h-5 text-slate-400" />
                 <div>
-                  <p className="text-sm text-slate-300 font-medium group-hover:text-white transition-colors">
-                    Ver código fuente
-                  </p>
+                  <p className="text-sm text-slate-300 font-medium group-hover:text-white transition-colors">Ver código fuente</p>
                   <p className="text-[11px] text-slate-600">HTML de la página actual</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-700 ml-auto group-hover:text-slate-400 transition-colors" />
@@ -1125,56 +816,37 @@ export const BrowserMenu = ({
           )}
 
           {/* ── STATS ── */}
-          {activeSection === "stats" && (
+          {!loading && activeSection === "stats" && (
             <MenuContent title="Mi actividad" subtitle="Resumen de hoy">
               <div className="grid grid-cols-2 gap-3 mb-5">
-                <StatCard
-                  icon={<Clock className="w-5 h-5 text-cyan-400" />}
-                  label="Tiempo navegando"
-                  value={`${Math.floor(MOCK_STATS.todayMinutes / 60)}h ${MOCK_STATS.todayMinutes % 60}m`}
-                  accent="cyan"
-                />
-                <StatCard
-                  icon={<Globe className="w-5 h-5 text-violet-400" />}
-                  label="Sitios visitados"
-                  value={MOCK_STATS.sitesVisited.toString()}
-                  accent="violet"
-                />
-                <StatCard
-                  icon={<Flame className="w-5 h-5 text-orange-400" />}
-                  label="Sitio más visitado"
-                  value={MOCK_STATS.topSite}
-                  subtitle={`${MOCK_STATS.topSiteMinutes}m`}
-                  accent="orange"
-                />
-                <StatCard
-                  icon={<Shield className="w-5 h-5 text-emerald-400" />}
-                  label="Trackers bloqueados"
-                  value={MOCK_STATS.trackersBlocked.toString()}
-                  accent="emerald"
-                />
+                <StatCard icon={<Clock className="w-5 h-5 text-cyan-400" />} label="Tiempo navegando" value={`${Math.floor(todayMinutes / 60)}h ${todayMinutes % 60}m`} accent="cyan" />
+                <StatCard icon={<Globe className="w-5 h-5 text-violet-400" />} label="Sitios visitados" value={sitesVisited.toString()} accent="violet" />
+                <StatCard icon={<Flame className="w-5 h-5 text-orange-400" />} label="Sitio más visitado" value={topSite?.domain || "—"} subtitle={topSite ? `${topSite.minutes}m` : undefined} accent="orange" />
+                <StatCard icon={<Shield className="w-5 h-5 text-emerald-400" />} label="Trackers bloqueados" value={trackersBlocked.toString()} accent="emerald" />
               </div>
 
-              {/* Usage by hour chart (simplified) */}
+              {/* Usage by hour chart */}
               <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
                 <p className="text-xs font-bold text-slate-300 mb-4">Uso por hora</p>
                 <div className="flex items-end gap-1 h-24">
-                  {Array.from({ length: 24 }, (_, i) => {
-                    const height = i < 7 ? 5 : i < 9 ? 40 : i < 12 ? 70 : i < 14 ? 50 : i < 18 ? 85 : i < 21 ? 60 : 30;
-                    const current = new Date().getHours() === i;
+                  {(hourlyUsage.length > 0
+                    ? hourlyUsage
+                    : Array.from({ length: 24 }, (_, i) => ({ hour: i, percentage: 0 }))
+                  ).map((h) => {
+                    const current = new Date().getHours() === h.hour;
                     return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
                         <div
                           className={`w-full rounded-sm transition-all duration-300 ${
                             current
                               ? "bg-gradient-to-t from-cyan-500 to-teal-400"
                               : "bg-white/[0.08] hover:bg-white/[0.15]"
                           }`}
-                          style={{ height: `${height}%` }}
-                          title={`${i}:00 - ${height}%`}
+                          style={{ height: `${h.percentage}%` }}
+                          title={`${h.hour}:00 - ${h.percentage}%`}
                         />
-                        {i % 6 === 0 && (
-                          <span className="text-[8px] text-slate-700">{i}</span>
+                        {h.hour % 6 === 0 && (
+                          <span className="text-[8px] text-slate-700">{h.hour}</span>
                         )}
                       </div>
                     );
@@ -1185,104 +857,32 @@ export const BrowserMenu = ({
           )}
 
           {/* ── SHARE ── */}
-          {activeSection === "share" && (
+          {!loading && activeSection === "share" && (
             <MenuContent title="Compartir" subtitle="Enviar esta página">
               <div className="space-y-2">
-                <ShareOption
-                  icon={<Copy className="w-4 h-4 text-slate-300" />}
-                  title="Copiar enlace"
-                  desc={currentUrl.replace(/^https?:\/\//, "").substring(0, 40)}
-                  onClick={() => {
-                    navigator.clipboard.writeText(currentUrl);
-                    toast({ title: "📋 URL copiada" });
-                  }}
-                />
-                <ShareOption
-                  icon={<QrCode className="w-4 h-4 text-violet-400" />}
-                  title="Código QR"
-                  desc="Genera un QR para compartir"
-                  onClick={() => toast({ title: "🔲 QR generado" })}
-                />
-                <ShareOption
-                  icon={<Mail className="w-4 h-4 text-sky-400" />}
-                  title="Enviar por email"
-                  desc="Abrir en tu cliente de correo"
-                  onClick={() => {
-                    window.open(`mailto:?subject=Mira%20esto&body=${currentUrl}`);
-                    onClose();
-                  }}
-                />
-                <ShareOption
-                  icon={<Send className="w-4 h-4 text-emerald-400" />}
-                  title="Enviar a mi teléfono"
-                  desc="Continuar en otro dispositivo"
-                  onClick={() => toast({ title: "Enlace enviado a tu teléfono" })}
-                />
-                <ShareOption
-                  icon={<FileDown className="w-4 h-4 text-amber-400" />}
-                  title="Guardar página completa"
-                  desc="Descargar como archivo HTML"
-                  onClick={() => toast({ title: "Página guardada" })}
-                />
-                <ShareOption
-                  icon={<Printer className="w-4 h-4 text-slate-400" />}
-                  title="Imprimir"
-                  desc="Enviar a impresora"
-                  onClick={() => {
-                    window.print();
-                    onClose();
-                  }}
-                />
+                <ShareOption icon={<Copy className="w-4 h-4 text-slate-300" />} title="Copiar enlace" desc={currentUrl.replace(/^https?:\/\//, "").substring(0, 40)} onClick={() => { navigator.clipboard.writeText(currentUrl); toast({ title: "📋 URL copiada" }); }} />
+                <ShareOption icon={<QrCode className="w-4 h-4 text-violet-400" />} title="Código QR" desc="Genera un QR para compartir" onClick={() => toast({ title: "🔲 QR generado" })} />
+                <ShareOption icon={<Mail className="w-4 h-4 text-sky-400" />} title="Enviar por email" desc="Abrir en tu cliente de correo" onClick={() => { window.open(`mailto:?subject=Mira%20esto&body=${currentUrl}`); onClose(); }} />
+                <ShareOption icon={<Send className="w-4 h-4 text-emerald-400" />} title="Enviar a mi teléfono" desc="Continuar en otro dispositivo" onClick={() => toast({ title: "Enlace enviado a tu teléfono" })} />
+                <ShareOption icon={<FileDown className="w-4 h-4 text-amber-400" />} title="Guardar página completa" desc="Descargar como archivo HTML" onClick={() => toast({ title: "Página guardada" })} />
+                <ShareOption icon={<Printer className="w-4 h-4 text-slate-400" />} title="Imprimir" desc="Enviar a impresora" onClick={() => { window.print(); onClose(); }} />
               </div>
             </MenuContent>
           )}
 
           {/* ── SETTINGS ── */}
-          {activeSection === "settings" && (
+          {!loading && activeSection === "settings" && (
             <MenuContent title="Configuración" subtitle="Personaliza Orion">
               <div className="space-y-2">
-                <SettingsLink
-                  icon={<Settings className="w-4 h-4 text-slate-300" />}
-                  title="Configuración general"
-                  onClick={() => { onNavigate("orion://settings"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Keyboard className="w-4 h-4 text-cyan-400" />}
-                  title="Atajos de teclado"
-                  onClick={() => { onNavigate("orion://settings/shortcuts"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Palette className="w-4 h-4 text-violet-400" />}
-                  title="Apariencia y temas"
-                  onClick={() => { onNavigate("orion://settings/appearance"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Shield className="w-4 h-4 text-emerald-400" />}
-                  title="Privacidad y seguridad"
-                  onClick={() => { onNavigate("orion://settings/privacy"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Globe className="w-4 h-4 text-amber-400" />}
-                  title="Motor de búsqueda"
-                  onClick={() => { onNavigate("orion://settings/search"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Download className="w-4 h-4 text-sky-400" />}
-                  title="Descargas"
-                  onClick={() => { onNavigate("orion://settings/downloads"); onClose(); }}
-                />
-                <SettingsLink
-                  icon={<Laptop className="w-4 h-4 text-rose-400" />}
-                  title="Sincronización"
-                  onClick={() => { onNavigate("orion://settings/sync"); onClose(); }}
-                />
-
+                <SettingsLink icon={<Settings className="w-4 h-4 text-slate-300" />} title="Configuración general" onClick={() => { onNavigate("orion://settings"); onClose(); }} />
+                <SettingsLink icon={<Keyboard className="w-4 h-4 text-cyan-400" />} title="Atajos de teclado" onClick={() => { onNavigate("orion://settings/shortcuts"); onClose(); }} />
+                <SettingsLink icon={<Palette className="w-4 h-4 text-violet-400" />} title="Apariencia y temas" onClick={() => { onNavigate("orion://settings/appearance"); onClose(); }} />
+                <SettingsLink icon={<Shield className="w-4 h-4 text-emerald-400" />} title="Privacidad y seguridad" onClick={() => { onNavigate("orion://settings/privacy"); onClose(); }} />
+                <SettingsLink icon={<Globe className="w-4 h-4 text-amber-400" />} title="Motor de búsqueda" onClick={() => { onNavigate("orion://settings/search"); onClose(); }} />
+                <SettingsLink icon={<Download className="w-4 h-4 text-sky-400" />} title="Descargas" onClick={() => { onNavigate("orion://settings/downloads"); onClose(); }} />
+                <SettingsLink icon={<Smartphone className="w-4 h-4 text-rose-400" />} title="Sincronización" onClick={() => { onNavigate("orion://settings/sync"); onClose(); }} />
                 <div className="mt-4 pt-4 border-t border-white/[0.06]">
-                  <SettingsLink
-                    icon={<Info className="w-4 h-4 text-slate-500" />}
-                    title="Acerca de Orion"
-                    onClick={() => { onNavigate("orion://about"); onClose(); }}
-                  />
+                  <SettingsLink icon={<Info className="w-4 h-4 text-slate-500" />} title="Acerca de Orion" onClick={() => { onNavigate("orion://about"); onClose(); }} />
                 </div>
               </div>
             </MenuContent>
@@ -1307,15 +907,7 @@ export const BrowserMenu = ({
    SUB-COMPONENTS
    ═══════════════════════════════════════════ */
 
-function MenuContent({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
+function MenuContent({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div className="p-5">
       <div className="mb-5">
@@ -1327,88 +919,35 @@ function MenuContent({
   );
 }
 
-function QuickActionBtn({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
+function QuickActionBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all text-slate-500 hover:text-slate-200 group"
-    >
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 py-2.5 rounded-xl hover:bg-white/[0.06] transition-all text-slate-500 hover:text-slate-200 group">
       <span className="group-hover:scale-110 transition-transform">{icon}</span>
       <span className="text-[9px] font-medium">{label}</span>
     </button>
   );
 }
 
-function ToolCard({
-  icon,
-  title,
-  desc,
-  accent,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  accent: string;
-  onClick: () => void;
-}) {
+function ToolCard({ icon, title, desc, accent, onClick }: { icon: React.ReactNode; title: string; desc: string; accent: string; onClick: () => void }) {
   const borderColors: Record<string, string> = {
-    sky: "hover:border-sky-500/20",
-    violet: "hover:border-violet-500/20",
-    rose: "hover:border-rose-500/20",
-    amber: "hover:border-amber-500/20",
-    emerald: "hover:border-emerald-500/20",
-    cyan: "hover:border-cyan-500/20",
-    orange: "hover:border-orange-500/20",
-    indigo: "hover:border-indigo-500/20",
-    red: "hover:border-red-500/20",
-    pink: "hover:border-pink-500/20",
-    slate: "hover:border-slate-500/20",
+    sky: "hover:border-sky-500/20", violet: "hover:border-violet-500/20", rose: "hover:border-rose-500/20",
+    amber: "hover:border-amber-500/20", emerald: "hover:border-emerald-500/20", cyan: "hover:border-cyan-500/20",
+    orange: "hover:border-orange-500/20", indigo: "hover:border-indigo-500/20", red: "hover:border-red-500/20",
+    pink: "hover:border-pink-500/20", slate: "hover:border-slate-500/20",
   };
-
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] ${
-        borderColors[accent] || ""
-      } transition-all duration-200 text-left group`}
-    >
-      <div className="mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform duration-200">
-        {icon}
-      </div>
+    <button onClick={onClick} className={`flex items-start gap-3 p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] ${borderColors[accent] || ""} transition-all duration-200 text-left group`}>
+      <div className="mt-0.5 flex-shrink-0 group-hover:scale-110 transition-transform duration-200">{icon}</div>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-          {title}
-        </p>
+        <p className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">{title}</p>
         <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">{desc}</p>
       </div>
     </button>
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
-  const colors: Record<string, string> = {
-    emerald: "text-emerald-400",
-    amber: "text-amber-400",
-    cyan: "text-cyan-400",
-  };
-
+function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+  const colors: Record<string, string> = { emerald: "text-emerald-400", amber: "text-amber-400", cyan: "text-cyan-400" };
   return (
     <div className="text-center">
       <p className={`text-sm font-bold ${colors[color] || "text-slate-300"}`}>{value}</p>
@@ -1417,18 +956,18 @@ function MiniStat({
   );
 }
 
-function PrivacyToggle({
-  icon,
-  title,
-  desc,
-  defaultOn = false,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  defaultOn?: boolean;
-}) {
-  const [on, setOn] = useState(defaultOn);
+function PrivacyToggle({ icon, title, desc, initialOn = false, onChange }: { icon: React.ReactNode; title: string; desc: string; initialOn?: boolean; onChange?: (on: boolean) => void }) {
+  const [on, setOn] = useState(initialOn);
+
+  useEffect(() => {
+    setOn(initialOn);
+  }, [initialOn]);
+
+  const handleToggle = () => {
+    const newVal = !on;
+    setOn(newVal);
+    onChange?.(newVal);
+  };
 
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
@@ -1438,15 +977,12 @@ function PrivacyToggle({
         <p className="text-[10px] text-slate-600">{desc}</p>
       </div>
       <button
-        onClick={() => setOn(!on)}
-        className={`w-10 h-5.5 rounded-full transition-all duration-300 flex-shrink-0 relative ${
-          on ? "bg-emerald-500" : "bg-white/[0.1]"
-        }`}
+        onClick={handleToggle}
+        className={`w-10 rounded-full transition-all duration-300 flex-shrink-0 relative ${on ? "bg-emerald-500" : "bg-white/[0.1]"}`}
+        style={{ height: 22 }}
       >
         <div
-          className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-all duration-300 ${
-            on ? "left-[calc(100%-20px)]" : "left-0.5"
-          }`}
+          className={`absolute rounded-full bg-white shadow-sm transition-all duration-300 ${on ? "left-[calc(100%-20px)]" : "left-0.5"}`}
           style={{ width: 18, height: 18, top: 2 }}
         />
       </button>
@@ -1454,26 +990,13 @@ function PrivacyToggle({
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  subtitle,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  subtitle?: string;
-  accent: string;
-}) {
+function StatCard({ icon, label, value, subtitle, accent }: { icon: React.ReactNode; label: string; value: string; subtitle?: string; accent: string }) {
   const bgColors: Record<string, string> = {
     cyan: "from-cyan-500/10 to-cyan-500/5 border-cyan-500/15",
     violet: "from-violet-500/10 to-violet-500/5 border-violet-500/15",
     orange: "from-orange-500/10 to-orange-500/5 border-orange-500/15",
     emerald: "from-emerald-500/10 to-emerald-500/5 border-emerald-500/15",
   };
-
   return (
     <div className={`p-4 rounded-xl bg-gradient-to-br border ${bgColors[accent] || ""}`}>
       <div className="flex items-center gap-2 mb-2">{icon}</div>
@@ -1484,29 +1007,12 @@ function StatCard({
   );
 }
 
-function ShareOption({
-  icon,
-  title,
-  desc,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  onClick: () => void;
-}) {
+function ShareOption({ icon, title, desc, onClick }: { icon: React.ReactNode; title: string; desc: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3 w-full p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-200 text-left group"
-    >
-      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-        {icon}
-      </div>
+    <button onClick={onClick} className="flex items-center gap-3 w-full p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-200 text-left group">
+      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">{icon}</div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-300 font-medium group-hover:text-white transition-colors">
-          {title}
-        </p>
+        <p className="text-sm text-slate-300 font-medium group-hover:text-white transition-colors">{title}</p>
         <p className="text-[11px] text-slate-600 truncate">{desc}</p>
       </div>
       <ChevronRight className="w-4 h-4 text-slate-700 group-hover:text-slate-400 transition-colors flex-shrink-0" />
@@ -1514,24 +1020,11 @@ function ShareOption({
   );
 }
 
-function SettingsLink({
-  icon,
-  title,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  onClick: () => void;
-}) {
+function SettingsLink({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3 w-full px-3.5 py-3 rounded-xl hover:bg-white/[0.04] transition-all duration-200 text-left group"
-    >
+    <button onClick={onClick} className="flex items-center gap-3 w-full px-3.5 py-3 rounded-xl hover:bg-white/[0.04] transition-all duration-200 text-left group">
       <span className="flex-shrink-0">{icon}</span>
-      <span className="text-sm text-slate-300 group-hover:text-white transition-colors flex-1">
-        {title}
-      </span>
+      <span className="text-sm text-slate-300 group-hover:text-white transition-colors flex-1">{title}</span>
       <ChevronRight className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-400 transition-colors" />
     </button>
   );
@@ -1544,4 +1037,9 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
       <p className="text-sm mt-3">{text}</p>
     </div>
   );
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
