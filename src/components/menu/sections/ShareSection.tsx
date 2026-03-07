@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, QrCode, Mail, Send, FileDown, Printer, Download, Share2, X, Phone } from "lucide-react";
+import { Copy, QrCode, Mail, Send, FileDown, Printer, Download, Share2, X, Phone, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { MenuContent, ShareOption } from "./ShareSectionUtils";
 
@@ -13,12 +13,26 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [copiedInQr, setCopiedInQr] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(currentUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleQr = () => {
     const size = 200;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(currentUrl)}&bgcolor=0a0e17&color=22d3ee`;
     setQrDataUrl(qrUrl);
-    toast({ title: "QR generado" });
+  };
+
+  const handleCopyInQr = () => {
+    navigator.clipboard.writeText(currentUrl);
+    setCopiedInQr(true);
+    setTimeout(() => setCopiedInQr(false), 2000);
   };
 
   const handleDownloadQr = () => {
@@ -27,13 +41,13 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
     link.href = qrDataUrl;
     link.download = "qr-code.png";
     link.click();
-    toast({ title: "QR descargado" });
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 2000);
   };
 
   const handleShareQr = async () => {
     if (!navigator.share) {
-      navigator.clipboard.writeText(currentUrl);
-      toast({ title: "URL copiada al portapapeles" });
+      handleCopyInQr();
       return;
     }
     try {
@@ -48,11 +62,9 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
       toast({ title: "Ingresa un número de teléfono" });
       return;
     }
-    // Enviar via WhatsApp como método más universal
     const message = encodeURIComponent(`Mira este enlace: ${currentUrl}`);
     const cleanNumber = phoneNumber.replace(/\D/g, "");
     window.open(`https://wa.me/${cleanNumber}?text=${message}`, "_blank");
-    toast({ title: "Enlace enviado por WhatsApp" });
     setShowPhoneInput(false);
     setPhoneNumber("");
   };
@@ -72,7 +84,6 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
       link.download = "pagina.html";
       link.click();
       URL.revokeObjectURL(url);
-      toast({ title: "Página guardada" });
     }
     onClose();
   };
@@ -80,7 +91,12 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
   return (
     <MenuContent title="Compartir" subtitle="Enviar esta página">
       <div className="space-y-2">
-        <ShareOption icon={<Copy className="w-4 h-4 text-slate-300" />} title="Copiar enlace" desc={currentUrl.replace(/^https?:\/\//, "").substring(0, 40)} onClick={() => { navigator.clipboard.writeText(currentUrl); toast({ title: "URL copiada" }); }} />
+        <ShareOption
+          icon={copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-300" />}
+          title={copied ? "¡Enlace copiado!" : "Copiar enlace"}
+          desc={currentUrl.replace(/^https?:\/\//, "").substring(0, 40)}
+          onClick={handleCopy}
+        />
         <ShareOption icon={<QrCode className="w-4 h-4 text-violet-400" />} title="Código QR" desc="Genera un QR para compartir" onClick={handleQr} />
         <ShareOption icon={<Mail className="w-4 h-4 text-sky-400" />} title="Enviar por email" desc="Abrir en tu cliente de correo" onClick={() => { window.open(`mailto:?subject=Mira%20esto&body=${encodeURIComponent(currentUrl)}`); onClose(); }} />
         <ShareOption icon={<Send className="w-4 h-4 text-emerald-400" />} title="Enviar a mi teléfono" desc="Continuar en otro dispositivo" onClick={() => setShowPhoneInput(!showPhoneInput)} />
@@ -127,18 +143,18 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
           <p className="text-[10px] text-slate-600 truncate max-w-full">{currentUrl}</p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { navigator.clipboard.writeText(currentUrl); toast({ title: "URL copiada" }); }}
+              onClick={handleCopyInQr}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-all"
             >
-              <Copy className="w-3 h-3" />
-              Copiar
+              {copiedInQr ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              {copiedInQr ? "¡Copiado!" : "Copiar"}
             </button>
             <button
               onClick={handleDownloadQr}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-all"
             >
-              <Download className="w-3 h-3" />
-              Descargar
+              {downloaded ? <Check className="w-3 h-3 text-emerald-400" /> : <Download className="w-3 h-3" />}
+              {downloaded ? "¡Descargado!" : "Descargar"}
             </button>
             <button
               onClick={handleShareQr}
