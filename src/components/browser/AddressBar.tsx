@@ -35,7 +35,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useFavorites } from "@/contexts/FavoritesContext";
+import { useFavorites } from "@/hooks/useFavorite";
 import { useToast } from "@/hooks/use-toast";
 
 /* ═══════════════════════════════════════════

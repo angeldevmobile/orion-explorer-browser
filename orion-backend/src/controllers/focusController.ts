@@ -1,13 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { focusService } from "../services/focusService";
+import { AuthenticatedRequest } from "../types/authType";
 
-// Helper para extraer mensaje de error
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
 }
 
-// Helper para código de error de Prisma
 function getErrorCode(err: unknown): string | undefined {
   if (typeof err === "object" && err !== null && "code" in err) {
     return (err as { code: string }).code;
@@ -15,19 +14,10 @@ function getErrorCode(err: unknown): string | undefined {
   return undefined;
 }
 
-// Interfaz para request autenticado
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-  };
-}
-
 export const focusController = {
-  // Blocked sites
-  async getBlockedSites(req: Request, res: Response) {
+  async getBlockedSites(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const sites = await focusService.getBlockedSites(userId);
       res.json({ success: true, data: sites });
     } catch (error: unknown) {
@@ -35,9 +25,9 @@ export const focusController = {
     }
   },
 
-  async addBlockedSite(req: Request, res: Response) {
+  async addBlockedSite(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const { domain } = req.body;
 
       if (!domain) {
@@ -55,9 +45,9 @@ export const focusController = {
     }
   },
 
-  async removeBlockedSite(req: Request, res: Response) {
+  async removeBlockedSite(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const { id } = req.params;
       await focusService.removeBlockedSite(id, userId);
       res.json({ success: true });
@@ -66,10 +56,9 @@ export const focusController = {
     }
   },
 
-  // Sessions
-  async startSession(req: Request, res: Response) {
+  async startSession(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const { durationMs } = req.body;
 
       if (!durationMs || durationMs <= 0) {
@@ -83,9 +72,9 @@ export const focusController = {
     }
   },
 
-  async endSession(req: Request, res: Response) {
+  async endSession(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const { id } = req.params;
       const { elapsedMs, completed } = req.body;
       await focusService.endSession(id, userId, elapsedMs, completed);
@@ -95,9 +84,9 @@ export const focusController = {
     }
   },
 
-  async getSessionHistory(req: Request, res: Response) {
+  async getSessionHistory(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const sessions = await focusService.getSessionHistory(userId);
       res.json({ success: true, data: sessions });
     } catch (error: unknown) {

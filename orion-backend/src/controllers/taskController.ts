@@ -1,16 +1,11 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { tasksService } from "../services/taskService";
-
-interface AuthRequest extends Request {
-  user: {
-    id: string;
-  };
-}
+import { AuthenticatedRequest } from "../types/authType";
 
 export const tasksController = {
-  async getAll(req: Request, res: Response) {
+  async getAll(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const tasks = await tasksService.getAll(userId);
       res.json({ success: true, data: tasks });
     } catch (error: unknown) {
@@ -19,9 +14,9 @@ export const tasksController = {
     }
   },
 
-  async create(req: Request, res: Response) {
+  async create(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const { text } = req.body;
 
       if (!text) {
@@ -36,9 +31,9 @@ export const tasksController = {
     }
   },
 
-  async toggle(req: Request, res: Response) {
+  async toggle(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const { id } = req.params;
       const task = await tasksService.toggle(id, userId);
       res.json({ success: true, data: task });
@@ -48,9 +43,9 @@ export const tasksController = {
     }
   },
 
-  async delete(req: Request, res: Response) {
+  async delete(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const { id } = req.params;
       await tasksService.delete(id, userId);
       res.json({ success: true });

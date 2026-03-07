@@ -1,15 +1,9 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/authService";
-import prisma from "../config/prisma"; 
-
-interface AuthenticatedRequest extends Request {
-  userId?: string;
-}
+import prisma from "../config/prisma";
+import { AuthenticatedRequest } from "../types/authType";
 
 export class AuthController {
-  /**
-   * POST /api/auth/register
-   */
   static async register(req: Request, res: Response) {
     try {
       const { email, password, username } = req.body;
@@ -35,9 +29,6 @@ export class AuthController {
     }
   }
 
-  /**
-   * POST /api/auth/login
-   */
   static async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
@@ -63,12 +54,9 @@ export class AuthController {
     }
   }
 
-  /**
-   * GET /api/auth/me
-   */
   static async getCurrentUser(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = req.userId;
+      const userId = req.userId!;
 
       const user = await prisma.user.findUnique({
         where: { id: userId },

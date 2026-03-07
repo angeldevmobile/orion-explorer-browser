@@ -1,12 +1,6 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { preferencesService } from "../services/preferentService";
-
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: string;
-    email: string;
-  };
-}
+import { AuthenticatedRequest } from "../types/authType";
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -14,9 +8,9 @@ function getErrorMessage(err: unknown): string {
 }
 
 export const preferencesController = {
-  async get(req: Request, res: Response) {
+  async get(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const prefs = await preferencesService.get(userId);
       res.json({ success: true, data: prefs });
     } catch (error: unknown) {
@@ -24,9 +18,9 @@ export const preferencesController = {
     }
   },
 
-  async update(req: Request, res: Response) {
+  async update(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthenticatedRequest).user.id;
+      const userId = req.userId!;
       const prefs = await preferencesService.update(userId, req.body);
       res.json({ success: true, data: prefs });
     } catch (error: unknown) {

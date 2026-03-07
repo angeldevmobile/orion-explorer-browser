@@ -1,11 +1,8 @@
 import { Response } from "express";
 import prisma from "../config/prisma";
-import { AuthenticatedRequest } from "../middleware/auth";
+import { AuthenticatedRequest } from "../types/authType";
 
 export class TabController {
-  /**
-   * GET /api/tabs - Obtener todas las tabs del usuario
-   */
   static async getTabs(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.userId!;
@@ -21,9 +18,6 @@ export class TabController {
     }
   }
 
-  /**
-   * POST /api/tabs - Crear una nueva tab
-   */
   static async createTab(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.userId!;
@@ -51,16 +45,12 @@ export class TabController {
     }
   }
 
-  /**
-   * PUT /api/tabs/:id - Actualizar una tab
-   */
   static async updateTab(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.userId!;
       const { id } = req.params;
       const { url, title, favicon } = req.body;
 
-      // Verificar que la tab pertenece al usuario
       const existingTab = await prisma.tab.findFirst({
         where: { id, userId },
       });
@@ -83,15 +73,11 @@ export class TabController {
     }
   }
 
-  /**
-   * DELETE /api/tabs/:id - Eliminar una tab
-   */
   static async deleteTab(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.userId!;
       const { id } = req.params;
 
-      // Verificar que la tab pertenece al usuario
       const existingTab = await prisma.tab.findFirst({
         where: { id, userId },
       });

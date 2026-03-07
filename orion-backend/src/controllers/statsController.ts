@@ -1,16 +1,11 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { statsService } from "../services/statsService";
-
-interface AuthRequest extends Request {
-  user: {
-    id: string;
-  };
-}
+import { AuthenticatedRequest } from "../types/authType";
 
 export const statsController = {
-  async getTodayStats(req: Request, res: Response) {
+  async getTodayStats(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const stats = await statsService.getTodayStats(userId);
       const topSites = await statsService.getTopSites(userId);
       const hourlyUsage = await statsService.getHourlyUsage(userId);
@@ -31,9 +26,9 @@ export const statsController = {
     }
   },
 
-  async recordVisit(req: Request, res: Response) {
+  async recordVisit(req: AuthenticatedRequest, res: Response) {
     try {
-      const userId = (req as AuthRequest).user.id;
+      const userId = req.userId!;
       const { domain, minutes } = req.body;
       await statsService.recordSiteVisit(userId, domain, minutes || 1);
       res.json({ success: true });
