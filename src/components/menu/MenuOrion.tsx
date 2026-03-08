@@ -58,6 +58,7 @@ interface BrowserMenuProps {
 		color: string;
 		tabIds: string[];
 		collapsed: boolean;
+		savedTabs: { url: string; title: string }[];
 	}[];
 	tabs?: { id: string; title: string; url: string; groupId?: string }[];
 	activeTabId?: string;
@@ -65,6 +66,9 @@ interface BrowserMenuProps {
 	onAddTabToGroup?: (tabId: string, groupId: string) => void;
 	onRemoveTabFromGroup?: (tabId: string) => void;
 	onDeleteGroup?: (groupId: string) => void;
+	onSelectTab?: (tabId: string) => void;
+	onReopenGroupTab?: (groupId: string, index: number) => void;
+	onRemoveSavedTab?: (groupId: string, index: number) => void;
 }
 
 interface MenuSection {
@@ -139,6 +143,9 @@ export const BrowserMenu = ({
 	onAddTabToGroup,
 	onRemoveTabFromGroup,
 	onDeleteGroup,
+	onSelectTab,
+	onReopenGroupTab,
+	onRemoveSavedTab,
 }: BrowserMenuProps) => {
 	const [activeSection, setActiveSection] = useState<string>("tools");
 	const [focusMode, setFocusMode] = useState(false);
@@ -476,6 +483,9 @@ export const BrowserMenu = ({
 							onAddTabToGroup={onAddTabToGroup}
 							onRemoveTabFromGroup={onRemoveTabFromGroup}
 							onDeleteGroup={onDeleteGroup}
+							onSelectTab={onSelectTab}
+							onReopenGroupTab={onReopenGroupTab}
+							onRemoveSavedTab={onRemoveSavedTab}
 						/>
 					)}
 					{!loading && activeSection === "focus" && (

@@ -52,6 +52,7 @@ interface TabGroup {
 	color: string;
 	tabIds: string[];
 	collapsed: boolean;
+	savedTabs: { url: string; title: string }[];
 }
 
 const QUICK_ACCESS = [
@@ -218,7 +219,10 @@ export const BrowserWindow = () => {
 		try {
 			const groups = await tabGroupService.getAll();
 			setTabGroups(
-				groups.map((g: TabGroup) => ({ ...g, collapsed: g.collapsed ?? false })),
+				groups.map((g: TabGroup) => ({
+					...g,
+					collapsed: g.collapsed ?? false,
+				})),
 			);
 			// Actualizar groupId en tabs locales
 			const groupedTabIds = new Map<string, string>();
@@ -265,6 +269,25 @@ export const BrowserWindow = () => {
 	};
 
 	const handleCloseTab = async (id: string) => {
+		// Si el tab pertenece a un grupo, guardar su info antes de cerrarlo
+		const closingTab = tabs.find((t) => t.id === id);
+		if (closingTab?.groupId) {
+			setTabGroups((prev) =>
+				prev.map((g) =>
+					g.id === closingTab.groupId
+						? {
+								...g,
+								tabIds: g.tabIds.filter((tid) => tid !== id),
+								savedTabs: [
+									...(g.savedTabs || []),
+									{ url: closingTab.url, title: closingTab.title },
+								],
+						  }
+						: g,
+				),
+			);
+		}
+
 		if (tabs.length === 1) {
 			await handleNewTab();
 			return;
@@ -281,6 +304,62 @@ export const BrowserWindow = () => {
 			tabService.deleteTab(id).catch(() => {});
 		}
 	};
+
+	const handleReopenGroupTab = useCallback(
+		async (groupId: string, index: number) => {
+			const group = tabGroups.find((g) => g.id === groupId);
+			if (!group || !group.savedTabs[index]) return;
+			const { url, title } = group.savedTabs[index];
+
+			// Crear nuevo tab
+			const tempId = `temp-${Date.now()}`;
+			const newTab: Tab = { id: tempId, title, url, groupId };
+			setTabs((prev) => [...prev, newTab]);
+			setActiveTabId(tempId);
+
+			// Quitar de savedTabs y agregar a tabIds
+			setTabGroups((prev) =>
+				prev.map((g) =>
+					g.id === groupId
+						? {
+								...g,
+								savedTabs: g.savedTabs.filter((_, i) => i !== index),
+								tabIds: [...g.tabIds, tempId],
+						  }
+						: g,
+				),
+			);
+
+			// Persistir en backend
+			if (isAuthenticated) {
+				try {
+					const created = await tabService.createTab({ url, title });
+					setTabs((prev) =>
+						prev.map((t) => (t.id === tempId ? { ...t, id: created.id } : t)),
+					);
+					setActiveTabId(created.id);
+					setTabGroups((prev) =>
+						prev.map((g) =>
+							g.id === groupId
+								? {
+										...g,
+										tabIds: g.tabIds.map((tid) =>
+											tid === tempId ? created.id : tid,
+										),
+								  }
+								: g,
+						),
+					);
+					tabGroupService.addTab(groupId, created.id).catch(() => {});
+				} catch {
+					/* keep temp */
+				}
+			}
+
+			setIsMenuOpen(false);
+		},
+		[tabGroups, isAuthenticated],
+	);
 
 	const normalizeUrl = (raw: string): string => {
 		const url = raw.trim();
@@ -459,6 +538,7 @@ export const BrowserWindow = () => {
 				color,
 				tabIds,
 				collapsed: false,
+				savedTabs: [],
 			};
 
 			// Optimistic update
@@ -876,6 +956,10 @@ export const BrowserWindow = () => {
 				onAddTabToGroup={handleAddTabToGroup}
 				onRemoveTabFromGroup={handleRemoveTabFromGroup}
 				onDeleteGroup={handleDeleteGroup}
+				onSelectTab={(tabId: string) => {
+					setActiveTabId(tabId);
+					setIsMenuOpen(false);
+				}}
 			/>
 		</div>
 	);
