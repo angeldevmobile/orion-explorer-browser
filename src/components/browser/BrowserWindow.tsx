@@ -19,7 +19,6 @@ import { FavoritesPanel } from "./FavoritesPanel";
 import { NewTabPage } from "./NewTabPage";
 import { BrowserMenu } from "@/components/menu/MenuOrion";
 import { useToast } from "@/hooks/use-toast";
-import { tabService, historyService, authService } from "@/services/api";
 import { WebView } from "./WebView";
 import { WindowControls } from "./WindowControls";
 import { voiceService } from "@/services/voiceService";
@@ -27,15 +26,32 @@ import { processVoiceQuery } from "@/services/geminiClient";
 import { FocusBlockedPage } from "@/pages/FocusBlockedPage";
 import { useFocusBlocker } from "@/hooks/useFocusBlocker";
 import { ViewSourcePage } from "./ViewSourcePage";
+import {
+	tabService,
+	historyService,
+	authService,
+	statsService,
+} from "@/services/api";
 
 interface Tab {
 	id: string;
 	title: string;
 	url: string;
 	favicon?: string;
+	groupId?: string;
 }
 
 type VoiceState = "idle" | "listening" | "processing" | "results";
+type WorkspaceMode = "normal" | "split" | "sidebar";
+
+// Grupos de pestañas
+interface TabGroup {
+	id: string;
+	name: string;
+	color: string;
+	tabIds: string[];
+	collapsed: boolean;
+}
 
 const QUICK_ACCESS = [
 	{ title: "YouTube", url: "youtube.com", icon: Youtube },
@@ -71,6 +87,11 @@ export const BrowserWindow = () => {
 	const [viewSourceHtml, setViewSourceHtml] = useState<string | null>(null);
 	const [viewSourceUrl, setViewSourceUrl] = useState("");
 
+	const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("normal");
+	const [secondaryUrl, setSecondaryUrl] = useState("https://www.google.com");
+	const [tabGroups, setTabGroups] = useState<TabGroup[]>([]);
+	const [showGroupManager, setShowGroupManager] = useState(false);
+
 	// ── Focus Mode state (compartido con BrowserMenu) ──
 	const [focusActive, setFocusActive] = useState(false);
 	const [focusTimeRemaining, setFocusTimeRemaining] = useState("");
@@ -96,8 +117,6 @@ export const BrowserWindow = () => {
 		loadRecentSearches();
 	}, []);
 
-	// ...existing code... (todo el resto de hooks, handlers, etc. sin cambios)
-
 	useEffect(() => {
 		if (voiceState !== "listening") return;
 		const id = setInterval(
@@ -106,6 +125,41 @@ export const BrowserWindow = () => {
 		);
 		return () => clearInterval(id);
 	}, [voiceState]);
+
+	useEffect(() => {
+		if (!isAuthenticated) return;
+
+		const interval = setInterval(() => {
+			// Solo contar si la tab activa es una página web real
+			if (activeTab?.url && !activeTab.url.startsWith("orion://")) {
+				statsService.incrementMinutes(1).catch(() => {});
+			}
+		}, 60_000); // cada 60 segundos = 1 minuto
+
+		return () => clearInterval(interval);
+	}, [isAuthenticated, activeTab?.url]);
+
+	// ── Sync: enviar stats de privacidad de Electron al backend cada 30s ──
+	useEffect(() => {
+		if (!isAuthenticated) return;
+
+		const syncPrivacy = async () => {
+			try {
+				const electronStats = await window.electron?.getPrivacyStats?.();
+				if (electronStats && electronStats.trackersBlocked > 0) {
+					await statsService.syncPrivacy(
+						electronStats.trackersBlocked,
+						electronStats.dataSavedBytes,
+					);
+				}
+			} catch {
+				/* silent */
+			}
+		};
+
+		const interval = setInterval(syncPrivacy, 30_000); // cada 30 segundos
+		return () => clearInterval(interval);
+	}, [isAuthenticated]);
 
 	const loadRecentSearches = () => {
 		try {
@@ -237,6 +291,14 @@ export const BrowserWindow = () => {
 				!activeTabId.startsWith("default")
 			) {
 				try {
+					// Extraer dominio para stats
+					let domain: string | null = null;
+					try {
+						domain = new URL(normalizedUrl).hostname;
+					} catch {
+						/* no es URL válida */
+					}
+
 					await Promise.all([
 						tabService.updateTab(activeTabId, {
 							url: normalizedUrl,
@@ -331,11 +393,93 @@ export const BrowserWindow = () => {
 		);
 	};
 
-	const updateActiveTab = (field: "title" | "favicon", value: string) => {
+	const updateActiveTab = (
+		field: "title" | "favicon" | "url",
+		value: string,
+	) => {
 		setTabs((prev) =>
 			prev.map((t) => (t.id === activeTabId ? { ...t, [field]: value } : t)),
 		);
 	};
+
+	const handleSplitView = useCallback(() => {
+		setWorkspaceMode((prev) => (prev === "split" ? "normal" : "split"));
+		if (workspaceMode !== "split") {
+			setSecondaryUrl("https://www.google.com");
+		}
+		setIsMenuOpen(false);
+	}, [workspaceMode]);
+
+	const handleSidePanel = useCallback(() => {
+		setWorkspaceMode((prev) => (prev === "sidebar" ? "normal" : "sidebar"));
+		if (workspaceMode !== "sidebar") {
+			setSecondaryUrl("https://www.google.com");
+		}
+		setIsMenuOpen(false);
+	}, [workspaceMode]);
+
+	const handleCreateTabGroup = useCallback(
+		(name: string, color: string) => {
+			const group: TabGroup = {
+				id: `group-${Date.now()}`,
+				name,
+				color,
+				tabIds: activeTabId ? [activeTabId] : [],
+				collapsed: false,
+			};
+			setTabGroups((prev) => [...prev, group]);
+			if (activeTabId) {
+				setTabs((prev) =>
+					prev.map((t) =>
+						t.id === activeTabId ? { ...t, groupId: group.id } : t,
+					),
+				);
+			}
+		},
+		[activeTabId],
+	);
+
+	const handleAddTabToGroup = useCallback((tabId: string, groupId: string) => {
+		setTabGroups((prev) =>
+			prev.map((g) =>
+				g.id === groupId && !g.tabIds.includes(tabId)
+					? { ...g, tabIds: [...g.tabIds, tabId] }
+					: g,
+			),
+		);
+		setTabs((prev) =>
+			prev.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
+		);
+	}, []);
+
+	const handleRemoveTabFromGroup = useCallback((tabId: string) => {
+		setTabGroups((prev) =>
+			prev.map((g) => ({
+				...g,
+				tabIds: g.tabIds.filter((id) => id !== tabId),
+			})),
+		);
+		setTabs((prev) =>
+			prev.map((t) => (t.id === tabId ? { ...t, groupId: undefined } : t)),
+		);
+	}, []);
+
+	const handleToggleGroupCollapse = useCallback((groupId: string) => {
+		setTabGroups((prev) =>
+			prev.map((g) =>
+				g.id === groupId ? { ...g, collapsed: !g.collapsed } : g,
+			),
+		);
+	}, []);
+
+	const handleDeleteGroup = useCallback((groupId: string) => {
+		setTabGroups((prev) => prev.filter((g) => g.id !== groupId));
+		setTabs((prev) =>
+			prev.map((t) =>
+				t.groupId === groupId ? { ...t, groupId: undefined } : t,
+			),
+		);
+	}, []);
 
 	if (loading) {
 		return (
@@ -390,16 +534,55 @@ export const BrowserWindow = () => {
 				</div>
 
 				{/* Tab strip */}
-				<div className="flex items-end px-2 pt-1.5 gap-0.5 bg-[#0b0f18]">
-					{tabs.map((tab) => (
-						<BrowserTab
-							key={tab.id}
-							{...tab}
-							isActive={tab.id === activeTabId}
-							onSelect={() => setActiveTabId(tab.id)}
-							onClose={() => handleCloseTab(tab.id)}
-						/>
-					))}
+				<div className="flex items-end px-2 pt-1.5 gap-0.5 bg-[#0b0f18] overflow-x-auto">
+					{/* Tabs agrupadas */}
+					{tabGroups.map((group) => {
+						const groupTabs = tabs.filter((t) => t.groupId === group.id);
+						if (groupTabs.length === 0) return null;
+						return (
+							<div key={group.id} className="flex items-end gap-0.5">
+								<button
+									onClick={() => handleToggleGroupCollapse(group.id)}
+									className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-t-md text-[10px] font-bold transition-all"
+									style={{
+										backgroundColor: `${group.color}20`,
+										color: group.color,
+									}}>
+									<span
+										className="w-2 h-2 rounded-full"
+										style={{ backgroundColor: group.color }}
+									/>
+									{group.name}
+									<span className="text-[9px] opacity-60">
+										{group.collapsed ? `(${groupTabs.length})` : ""}
+									</span>
+								</button>
+								{!group.collapsed &&
+									groupTabs.map((tab) => (
+										<BrowserTab
+											key={tab.id}
+											{...tab}
+											isActive={tab.id === activeTabId}
+											onSelect={() => setActiveTabId(tab.id)}
+											onClose={() => handleCloseTab(tab.id)}
+										/>
+									))}
+							</div>
+						);
+					})}
+
+					{/* Tabs sin grupo */}
+					{tabs
+						.filter((t) => !t.groupId)
+						.map((tab) => (
+							<BrowserTab
+								key={tab.id}
+								{...tab}
+								isActive={tab.id === activeTabId}
+								onSelect={() => setActiveTabId(tab.id)}
+								onClose={() => handleCloseTab(tab.id)}
+							/>
+						))}
 
 					<button
 						onClick={handleNewTab}
@@ -408,6 +591,15 @@ export const BrowserWindow = () => {
 					</button>
 
 					<div className="flex-1" />
+
+					{/* Indicador de modo workspace */}
+					{workspaceMode !== "normal" && (
+						<button
+							onClick={() => setWorkspaceMode("normal")}
+							className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-md text-[10px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all">
+							✕ {workspaceMode === "split" ? "Split" : "Panel"}
+						</button>
+					)}
 				</div>
 
 				{/* Navigation + Address bar */}
@@ -455,26 +647,131 @@ export const BrowserWindow = () => {
 						timeRemaining={focusTimeRemaining}
 						onGoBack={() => handleNavigate("orion://newtab")}
 					/>
-				) : activeTab?.url === "orion://view-source" && viewSourceHtml ? (
-          <ViewSourcePage html={viewSourceHtml} url={viewSourceUrl} />
-        ) : showWebView ? (
-					<WebView
-						url={activeTab!.url}
-						onTitleUpdate={(title) => updateActiveTab("title", title)}
-						onFaviconUpdate={(favicon) => updateActiveTab("favicon", favicon)}
-						className="w-full h-full"
-					/>
 				) : (
-					<NewTabPage
-						voiceState={voiceState}
-						transcription={transcription}
-						audioLevels={audioLevels}
-						suggestions={suggestions}
-						quickAccess={QUICK_ACCESS}
-						recentSearches={recentSearches}
-						onVoiceCommand={handleVoiceCommand}
-						onNavigate={handleNavigate}
-					/>
+					<div
+						className={`w-full h-full flex ${
+							workspaceMode === "split"
+								? "flex-row"
+								: workspaceMode === "sidebar"
+								? "flex-row"
+								: ""
+						}`}>
+						{/* Panel principal */}
+						<div
+							className={`h-full overflow-hidden ${
+								workspaceMode === "split"
+									? "w-1/2"
+									: workspaceMode === "sidebar"
+									? "flex-1"
+									: "w-full"
+							}`}>
+							{activeTab?.url === "orion://view-source" && viewSourceHtml ? (
+								<ViewSourcePage html={viewSourceHtml} url={viewSourceUrl} />
+							) : showWebView ? (
+								<WebView
+									url={activeTab!.url}
+									onTitleUpdate={(title) => updateActiveTab("title", title)}
+									onFaviconUpdate={(favicon) =>
+										updateActiveTab("favicon", favicon)
+									}
+									onUrlChange={(newUrl) => {
+										updateActiveTab("url", newUrl);
+										if (
+											isAuthenticated &&
+											!activeTabId.startsWith("temp-") &&
+											!activeTabId.startsWith("default")
+										) {
+											try {
+												const parsedUrl = new URL(newUrl);
+												const domain = parsedUrl.hostname;
+												const isSearchEngine =
+													(domain.includes("google.") &&
+														parsedUrl.pathname.startsWith("/search")) ||
+													(domain.includes("bing.") &&
+														parsedUrl.pathname.startsWith("/search")) ||
+													domain === "search.yahoo.com" ||
+													domain.includes("duckduckgo.com");
+												if (!newUrl.startsWith("orion://") && !isSearchEngine) {
+													statsService.recordVisit(domain).catch(() => {});
+													historyService
+														.addHistory({ url: newUrl, title: domain })
+														.catch(() => {});
+												}
+											} catch {
+												/* URL inválida */
+											}
+										}
+									}}
+									className="w-full h-full"
+								/>
+							) : (
+								<NewTabPage
+									voiceState={voiceState}
+									transcription={transcription}
+									audioLevels={audioLevels}
+									suggestions={suggestions}
+									quickAccess={QUICK_ACCESS}
+									recentSearches={recentSearches}
+									onVoiceCommand={handleVoiceCommand}
+									onNavigate={handleNavigate}
+								/>
+							)}
+						</div>
+
+						{/* Divisor + Panel secundario */}
+						{workspaceMode !== "normal" && (
+							<>
+								<div
+									className={`flex-shrink-0 ${
+										workspaceMode === "split"
+											? "w-[3px] bg-cyan-500/20 hover:bg-cyan-500/40 cursor-col-resize"
+											: "w-[1px] bg-white/[0.08]"
+									}`}
+								/>
+								<div
+									className={`h-full overflow-hidden flex flex-col ${
+										workspaceMode === "split"
+											? "w-1/2"
+											: "w-[320px] flex-shrink-0"
+									}`}>
+									{/* Mini address bar del panel secundario */}
+									<div className="flex items-center gap-2 px-2 py-1.5 bg-[#0d1117] border-b border-white/[0.06]">
+										<input
+											type="text"
+											defaultValue={secondaryUrl}
+											onKeyDown={(e) => {
+												if (e.key === "Enter") {
+													const raw = (
+														e.target as HTMLInputElement
+													).value.trim();
+													const normalized =
+														raw.startsWith("http://") ||
+														raw.startsWith("https://")
+															? raw
+															: raw.includes(".") && !raw.includes(" ")
+															? `https://${raw}`
+															: `https://www.google.com/search?q=${encodeURIComponent(
+																	raw,
+															  )}`;
+													setSecondaryUrl(normalized);
+												}
+											}}
+											className="flex-1 text-xs bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1 text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/30"
+											placeholder="URL del panel..."
+										/>
+										<button
+											onClick={() => setWorkspaceMode("normal")}
+											className="text-slate-600 hover:text-slate-300 text-xs px-1">
+											✕
+										</button>
+									</div>
+									<div className="flex-1">
+										<WebView url={secondaryUrl} className="w-full h-full" />
+									</div>
+								</div>
+							</>
+						)}
+					</div>
 				)}
 			</div>
 
@@ -498,6 +795,17 @@ export const BrowserWindow = () => {
 					setFocusBlockedSites(sites);
 					setFocusTimeRemaining(timeRemaining);
 				}}
+				onSplitView={handleSplitView}
+				onSidePanel={handleSidePanel}
+				onTabGroups={() => setShowGroupManager(true)}
+				workspaceMode={workspaceMode}
+				tabGroups={tabGroups}
+				tabs={tabs}
+				activeTabId={activeTabId}
+				onCreateTabGroup={handleCreateTabGroup}
+				onAddTabToGroup={handleAddTabToGroup}
+				onRemoveTabFromGroup={handleRemoveTabFromGroup}
+				onDeleteGroup={handleDeleteGroup}
 			/>
 		</div>
 	);

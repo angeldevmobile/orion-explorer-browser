@@ -1,5 +1,18 @@
 export {};
 
+interface PagePrivacyStats {
+  trackersBlocked: number;
+  cookiesBlocked: number;
+  dataSavedBytes: number;
+}
+
+interface PrivacyBlockedEvent {
+  type: 'tracker' | 'mining';
+  hostname: string;
+  pageHost: string | null;
+  pageStats: PagePrivacyStats | null;
+}
+
 declare global {
   interface Window {
     electron?: {
@@ -34,6 +47,23 @@ declare global {
 
       // Obtener fuente de página
       getPageSource: () => Promise<string | null>;
+
+      // Privacidad
+      updatePrivacyPrefs: (prefs: Record<string, boolean>) => Promise<Record<string, boolean>>;
+      getPrivacyStats: () => Promise<PagePrivacyStats>;
+      getPagePrivacyStats: (hostname: string) => Promise<PagePrivacyStats>;
+      resetPagePrivacyStats: (hostname: string) => Promise<boolean>;
+      clearBrowsingData: (options: {
+        cache?: boolean;
+        cookies?: boolean;
+        localStorage?: boolean;
+        sessionStorage?: boolean;
+        indexedDB?: boolean;
+      }) => Promise<boolean>;
+
+      // Eventos de privacidad en tiempo real
+      onPrivacyBlocked: (callback: (data: PrivacyBlockedEvent) => void) => void;
+      removePrivacyBlockedListener: () => void;
     };
   }
 }

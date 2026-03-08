@@ -24,6 +24,7 @@ model User {
   browsingStats  BrowsingStats[]
   siteVisits     SiteVisit[]
   preferences    UserPreference?
+  hourlyActivities HourlyActivity[]
 }
 
 model Favorite {
@@ -137,4 +138,15 @@ model UserPreference {
   blockMining     Boolean @default(true)
   userId          String @unique
   user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HourlyActivity {
+  id     String   @id @default(cuid())
+  date   DateTime @default(now()) @db.Date
+  hour   Int
+  hits   Int      @default(1)
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([date, hour, userId])
 }

@@ -36,6 +36,12 @@ export interface TodayStats {
   hourlyUsage: { hour: number; percentage: number }[];
 }
 
+export interface WeeklyStats {
+  timeline: { date: string; day: string; minutes: number; sites: number; trackers: number }[];
+  topSites: { domain: string; totalMinutes: number; trend: number[] }[];
+  totals: { minutes: number; sites: number; trackers: number };
+}
+
 export interface UserPrefs {
   theme: string;
   defaultZoom: number;
@@ -52,6 +58,7 @@ export function useMenuData(isOpen: boolean) {
   const [blockedSites, setBlockedSites] = useState<BlockedSite[]>([]);
   const [stats, setStats] = useState<TodayStats | null>(null);
   const [prefs, setPrefs] = useState<UserPrefs | null>(null);
+  const [weeklyStats, setWeeklyStats] = useState<WeeklyStats | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -64,12 +71,14 @@ export function useMenuData(isOpen: boolean) {
       focusService.getBlockedSites().catch(() => []),
       statsService.getToday().catch(() => null),
       preferencesService.get().catch(() => null),
-    ]).then(([n, t, b, s, p]) => {
+      statsService.getWeekly(7).catch(() => null),
+    ]).then(([n, t, b, s, p, w]) => {
       setNotes(n);
       setTasks(t);
       setBlockedSites(b);
       setStats(s);
       setPrefs(p);
+      setWeeklyStats(w);
       setLoading(false);
     });
   }, [isOpen]);
@@ -143,5 +152,6 @@ export function useMenuData(isOpen: boolean) {
     startFocusSession,
     endFocusSession,
     updatePreference,
+    weeklyStats,
   };
 }

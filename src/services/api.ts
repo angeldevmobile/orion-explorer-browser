@@ -286,8 +286,23 @@ export const statsService = {
     return response.data.data;
   },
 
+  getWeekly: async (days: number = 7) => {
+    const response = await api.get(`/stats/weekly?days=${days}`);
+    return response.data.data;
+  },
+
   recordVisit: async (domain: string, minutes?: number) => {
     const response = await api.post('/stats/visit', { domain, minutes });
+    return response.data;
+  },
+
+  incrementMinutes: async (minutes: number = 1) => {
+    const response = await api.post('/stats/increment-minutes', { minutes });
+    return response.data;
+  },
+
+  syncPrivacy: async (trackersBlocked: number, dataSavedBytes: number) => {
+    const response = await api.post('/stats/sync-privacy', { trackersBlocked, dataSavedBytes });
     return response.data;
   },
 };

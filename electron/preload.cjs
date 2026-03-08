@@ -32,4 +32,19 @@ contextBridge.exposeInMainWorld('electron', {
 
   // HTML
   getPageSource: () => ipcRenderer.invoke('get-page-source'),
+
+  // Privacidad
+  updatePrivacyPrefs: (prefs) => ipcRenderer.invoke('update-privacy-prefs', prefs),
+  getPrivacyStats: () => ipcRenderer.invoke('get-privacy-stats'),
+  getPagePrivacyStats: (hostname) => ipcRenderer.invoke('get-page-privacy-stats', hostname),
+  resetPagePrivacyStats: (hostname) => ipcRenderer.invoke('reset-page-privacy-stats', hostname),
+  clearBrowsingData: (options) => ipcRenderer.invoke('clear-browsing-data', options),
+
+  // Escuchar eventos de bloqueo en tiempo real
+  onPrivacyBlocked: (callback) => {
+    ipcRenderer.on('privacy-blocked', (event, data) => callback(data));
+  },
+  removePrivacyBlockedListener: () => {
+    ipcRenderer.removeAllListeners('privacy-blocked');
+  },
 });

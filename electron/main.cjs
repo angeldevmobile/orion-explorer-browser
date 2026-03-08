@@ -1,9 +1,218 @@
-const { app, BrowserWindow, ipcMain, dialog, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, session, webContents } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 
 let mainWindow;
+
+// ═══════════════════════════════════════════
+// ═══ PRIVACIDAD: Estado y configuración ═══
+// ═══════════════════════════════════════════
+
+let privacyPrefs = {
+  blockTrackers: true,
+  blockThirdPartyCookies: true,
+  antiFingerprint: true,
+  forceHttps: true,
+  blockMining: true,
+};
+
+// Stats GLOBALES de la sesión
+let privacyStats = {
+  trackersBlocked: 0,
+  cookiesBlocked: 0,
+  dataSavedBytes: 0,
+};
+
+// Stats POR PÁGINA (clave = hostname)
+const pagePrivacyStats = new Map();
+
+function getPageStatsFor(hostname) {
+  if (!pagePrivacyStats.has(hostname)) {
+    pagePrivacyStats.set(hostname, { trackersBlocked: 0, cookiesBlocked: 0, dataSavedBytes: 0 });
+  }
+  return pagePrivacyStats.get(hostname);
+}
+
+function getPageHostname(wcId) {
+  try {
+    const wc = webContents.fromId(wcId);
+    if (wc) {
+      const u = new URL(wc.getURL());
+      return u.hostname;
+    }
+  } catch {}
+  return null;
+}
+
+// ═══ Listas de dominios (Disconnect.me core + extras) ═══
+
+const TRACKER_DOMAINS = [
+  // ── Google ──
+  'google-analytics.com', 'googletagmanager.com', 'analytics.google.com',
+  'doubleclick.net', 'adservice.google.com', 'googlesyndication.com',
+  'googleadservices.com', 'pagead2.googlesyndication.com', 'google-analytics.l.google.com',
+  // ── Facebook / Meta ──
+  'facebook.net', 'connect.facebook.net', 'pixel.facebook.com',
+  'an.facebook.com', 'ads.facebook.com',
+  // ── Twitter / X ──
+  'analytics.twitter.com', 'ads-twitter.com', 't.co', 'platform.twitter.com',
+  'syndication.twitter.com', 'ads-api.twitter.com',
+  // ── Microsoft ──
+  'bat.bing.com', 'clarity.ms', 'c.bing.com', 'c.msn.com',
+  // ── Analytics ──
+  'hotjar.com', 'static.hotjar.com', 'vars.hotjar.com',
+  'mixpanel.com', 'api.mixpanel.com', 'cdn.mxpnl.com',
+  'segment.io', 'api.segment.io', 'cdn.segment.com',
+  'amplitude.com', 'api.amplitude.com', 'cdn.amplitude.com',
+  'heap.io', 'heapanalytics.com', 'cdn.heapanalytics.com',
+  'fullstory.com', 'rs.fullstory.com',
+  'mouseflow.com', 'cdn.mouseflow.com',
+  'crazyegg.com', 'script.crazyegg.com',
+  'luckyorange.com', 'cdn.luckyorange.com',
+  'inspectlet.com', 'cdn.inspectlet.com',
+  'logrocket.com', 'cdn.logrocket.io',
+  'pendo.io', 'cdn.pendo.io',
+  'kissmetrics.com', 'kissmetrics.io',
+  'chartbeat.com', 'static.chartbeat.com',
+  'newrelic.com', 'nr-data.net', 'bam.nr-data.net', 'js-agent.newrelic.com',
+  'sentry.io', 'browser.sentry-cdn.com',
+  'bugsnag.com', 'sessions.bugsnag.com',
+  'rollbar.com', 'cdn.rollbar.com',
+  // ── Advertising ──
+  'adnxs.com', 'adsrvr.org', 'criteo.com', 'criteo.net',
+  'taboola.com', 'cdn.taboola.com',
+  'outbrain.com', 'widgets.outbrain.com',
+  'scorecardresearch.com', 'quantserve.com', 'bluekai.com',
+  'demdex.net', 'krxd.net', 'exelator.com',
+  'adform.net', 'pubmatic.com', 'openx.net',
+  'rubiconproject.com', 'fastclick.net',
+  'smartadserver.com', 'sascdn.com',
+  'moatads.com', 'moatpixel.com', 'z.moatads.com',
+  'casalemedia.com', 'indexexchange.com',
+  'bidswitch.net', '33across.com', 'tynt.com',
+  'contextweb.com', 'sovrn.com',
+  'media.net', 'mediamath.com',
+  'turn.com', 'mathtag.com',
+  'liveintent.com', 'lijit.com',
+  'yieldmo.com', 'sharethrough.com',
+  'spotxchange.com', 'spotx.tv',
+  'conversantmedia.com', 'dotomi.com',
+  'teads.tv', 'ttdns.com',
+  'amazon-adsystem.com', 's.amazon-adsystem.com',
+  'advertising.com', 'atwola.com',
+  'yimg.com',
+  // ── Social widgets/tracking ──
+  'snap.licdn.com', 'widgets.pinterest.com', 'assets.pinterest.com',
+  'static.ads-twitter.com',
+  'sc-static.net', 'tr.snapchat.com',
+  // ── Fingerprinting ──
+  'fpjs.io', 'fingerprintjs.com', 'cdn.fpjs.io',
+  'iovation.com', 'threatmetrix.com',
+  // ── Data brokers ──
+  'acxiom.com', 'liveramp.com', 'rlcdn.com',
+  'agkn.com', 'bkrtx.com',
+  // ── Tracking pixels misc ──
+  'omtrdc.net', 'everesttech.net', 'rfihub.com',
+  'adsymptotic.com', 'serving-sys.com',
+  'eyeota.net', 'narrative.io',
+  'branch.io', 'app.link', 'bnc.lt',
+  'appsflyer.com', 'onelink.me',
+  'adjust.com', 'app.adjust.com',
+  'kochava.com', 'singular.net',
+];
+
+const MINING_DOMAINS = [
+  'coinhive.com', 'coin-hive.com', 'authedmine.com',
+  'cryptoloot.pro', 'crypto-loot.com',
+  'minero.cc', 'jsecoin.com', 'coinimp.com',
+  'ppoi.org', 'cryptonight.wasm',
+  'webminepool.com', 'minr.pw',
+  'coinerra.com', 'coin-have.com', 'hashforcash.us',
+  'monerominer.rocks', 'webmine.cz',
+];
+
+function isDomainMatch(hostname, domainList) {
+  return domainList.some(d => hostname === d || hostname.endsWith('.' + d));
+}
+
+function estimateRequestSize(url) {
+  if (url.includes('.js')) return 45000;
+  if (url.includes('.gif') || url.includes('.png') || url.includes('.jpg')) return 5000;
+  if (url.includes('.css')) return 15000;
+  return 12000;
+}
+
+// ═══ Anti-fingerprint script (se inyecta en cada página) ═══
+const ANTI_FINGERPRINT_SCRIPT = `
+(function() {
+  // Canvas fingerprint protection: añade ruido imperceptible
+  const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+  HTMLCanvasElement.prototype.toDataURL = function(type) {
+    const ctx = this.getContext('2d');
+    if (ctx) {
+      const imageData = ctx.getImageData(0, 0, this.width, this.height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        imageData.data[i] ^= 1;     // R: flip bit menos significativo
+        imageData.data[i+1] ^= 1;   // G
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    return origToDataURL.apply(this, arguments);
+  };
+
+  const origToBlob = HTMLCanvasElement.prototype.toBlob;
+  HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+    const ctx = this.getContext('2d');
+    if (ctx) {
+      const imageData = ctx.getImageData(0, 0, this.width, this.height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        imageData.data[i] ^= 1;
+        imageData.data[i+1] ^= 1;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    return origToBlob.apply(this, arguments);
+  };
+
+  // WebGL fingerprint protection
+  const getParamOrig = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function(param) {
+    // UNMASKED_VENDOR_WEBGL / UNMASKED_RENDERER_WEBGL
+    if (param === 0x9245 || param === 0x9246) {
+      return 'Generic GPU';
+    }
+    return getParamOrig.apply(this, arguments);
+  };
+
+  // AudioContext fingerprint protection
+  const origCreateOscillator = AudioContext.prototype.createOscillator;
+  AudioContext.prototype.createOscillator = function() {
+    const osc = origCreateOscillator.apply(this, arguments);
+    const origConnect = osc.connect.bind(osc);
+    osc.connect = function(dest) {
+      if (dest instanceof AnalyserNode) {
+        // Silenciosamente retorna sin conectar a analysers usados para fingerprint
+        return osc;
+      }
+      return origConnect(dest);
+    };
+    return osc;
+  };
+
+  // Navigator properties normalization
+  Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
+  Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+  Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+
+  // Plugins list normalization
+  Object.defineProperty(navigator, 'plugins', { get: () => [] });
+})();
+`;
+
+// ═══════════════════════════════════════════
+// ═══ Crear ventana
+// ═══════════════════════════════════════════
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -44,12 +253,134 @@ function createWindow() {
   });
 }
 
+// ═══════════════════════════════════════════
+// ═══ App Ready (UNA SOLA VEZ)
+// ═══════════════════════════════════════════
+
 app.whenReady().then(() => {
   createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    }
+  });
+
+  // ═══ Privacidad: interceptores de red ═══
+  const ses = session.defaultSession;
+
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    try {
+      const url = new URL(details.url);
+      const pageHost = getPageHostname(details.webContentsId);
+
+      // Bloquear trackers
+      if (privacyPrefs.blockTrackers && isDomainMatch(url.hostname, TRACKER_DOMAINS)) {
+        const size = estimateRequestSize(details.url);
+        privacyStats.trackersBlocked++;
+        privacyStats.dataSavedBytes += size;
+        if (pageHost) {
+          const ps = getPageStatsFor(pageHost);
+          ps.trackersBlocked++;
+          ps.dataSavedBytes += size;
+        }
+        // Notificar al renderer para actualizar badge en tiempo real
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('privacy-blocked', {
+            type: 'tracker',
+            hostname: url.hostname,
+            pageHost,
+            pageStats: pageHost ? getPageStatsFor(pageHost) : null,
+          });
+        }
+        callback({ cancel: true });
+        return;
+      }
+
+      // Bloquear minería
+      if (privacyPrefs.blockMining && isDomainMatch(url.hostname, MINING_DOMAINS)) {
+        const size = estimateRequestSize(details.url);
+        privacyStats.trackersBlocked++;
+        privacyStats.dataSavedBytes += size;
+        if (pageHost) {
+          const ps = getPageStatsFor(pageHost);
+          ps.trackersBlocked++;
+          ps.dataSavedBytes += size;
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('privacy-blocked', {
+            type: 'mining',
+            hostname: url.hostname,
+            pageHost,
+            pageStats: pageHost ? getPageStatsFor(pageHost) : null,
+          });
+        }
+        callback({ cancel: true });
+        return;
+      }
+
+      // Forzar HTTPS
+      if (privacyPrefs.forceHttps && url.protocol === 'http:' && url.hostname !== 'localhost') {
+        callback({ redirectURL: details.url.replace('http:', 'https:') });
+        return;
+      }
+    } catch { /* URL inválida */ }
+
+    callback({});
+  });
+
+  // Bloquear cookies de terceros
+  ses.webRequest.onHeadersReceived((details, callback) => {
+    if (!privacyPrefs.blockThirdPartyCookies) {
+      callback({});
+      return;
+    }
+    try {
+      const responseHeaders = { ...details.responseHeaders };
+      const requestUrl = new URL(details.url);
+      const mainUrl = mainWindow ? new URL(mainWindow.webContents.getURL()) : null;
+
+      if (mainUrl && requestUrl.hostname !== mainUrl.hostname) {
+        const hasCookies = responseHeaders['set-cookie'] || responseHeaders['Set-Cookie'];
+        if (hasCookies) {
+          delete responseHeaders['set-cookie'];
+          delete responseHeaders['Set-Cookie'];
+          privacyStats.cookiesBlocked++;
+          const pageHost = getPageHostname(details.webContentsId);
+          if (pageHost) {
+            getPageStatsFor(pageHost).cookiesBlocked++;
+          }
+        }
+      }
+      callback({ responseHeaders });
+    } catch {
+      callback({});
+    }
+  });
+
+  // Anti-fingerprinting: limpiar headers
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (!privacyPrefs.antiFingerprint) {
+      callback({});
+      return;
+    }
+    const headers = { ...details.requestHeaders };
+    delete headers['X-Client-Data'];
+    // Normalizar Accept-Language para reducir fingerprint
+    headers['Accept-Language'] = 'en-US,en;q=0.9';
+    callback({ requestHeaders: headers });
+  });
+
+  // Inyectar anti-fingerprint script en webviews
+  ses.webRequest.onCompleted((details) => {
+    if (!privacyPrefs.antiFingerprint) return;
+    if (details.resourceType === 'mainFrame' || details.resourceType === 'subFrame') {
+      try {
+        const wc = webContents.fromId(details.webContentsId);
+        if (wc && wc.getType() === 'webview') {
+          wc.executeJavaScript(ANTI_FINGERPRINT_SCRIPT).catch(() => {});
+        }
+      } catch {}
     }
   });
 });
@@ -137,7 +468,6 @@ ipcMain.handle('open-devtools', (event, panel) => {
   if (!mainWindow) return;
   mainWindow.webContents.openDevTools();
   if (panel) {
-    // Esperar a que DevTools cargue y cambiar al panel solicitado
     const trySwitch = (attempts = 0) => {
       const devtools = mainWindow.webContents.devToolsWebContents;
       if (devtools) {
@@ -148,6 +478,11 @@ ipcMain.handle('open-devtools', (event, panel) => {
     };
     setTimeout(() => trySwitch(), 300);
   }
+});
+
+ipcMain.handle('close-devtools', () => {
+  if (!mainWindow) return;
+  mainWindow.webContents.closeDevTools();
 });
 
 // ═══ IPC: Audio mute ═══
@@ -165,15 +500,15 @@ ipcMain.handle('is-muted', () => {
 // ═══ IPC: Page Source ═══
 ipcMain.handle('get-page-source', async () => {
   if (!mainWindow) return null;
-  const allWebContents = require('electron').webContents.getAllWebContents();
-  const guest = allWebContents.find(wc => wc.getType() === 'webview');
+  const allWC = webContents.getAllWebContents();
+  const guest = allWC.find(wc => wc.getType() === 'webview');
   if (guest) {
     return await guest.executeJavaScript('document.documentElement.outerHTML');
   }
   return await mainWindow.webContents.executeJavaScript('document.documentElement.outerHTML');
 });
 
-// ═══ IPC: Vista responsiva (device emulation) ═══
+// ═══ IPC: Vista responsiva ═══
 let deviceEmulationActive = false;
 ipcMain.handle('toggle-device-emulation', () => {
   if (!mainWindow) return false;
@@ -193,7 +528,55 @@ ipcMain.handle('toggle-device-emulation', () => {
   return deviceEmulationActive;
 });
 
-ipcMain.handle('close-devtools', () => {
-  if (!mainWindow) return;
-  mainWindow.webContents.closeDevTools();
+// ═══ IPC: Privacidad ═══
+ipcMain.handle('update-privacy-prefs', (event, prefs) => {
+  privacyPrefs = { ...privacyPrefs, ...prefs };
+  return privacyPrefs;
+});
+
+ipcMain.handle('get-privacy-stats', () => {
+  return privacyStats;
+});
+
+// NUEVO: Stats por página específica
+ipcMain.handle('get-page-privacy-stats', (event, hostname) => {
+  return pagePrivacyStats.get(hostname) || { trackersBlocked: 0, cookiesBlocked: 0, dataSavedBytes: 0 };
+});
+
+// NUEVO: Resetear stats de una página (cuando navega a otra URL)
+ipcMain.handle('reset-page-privacy-stats', (event, hostname) => {
+  pagePrivacyStats.delete(hostname);
+  return true;
+});
+
+ipcMain.handle('clear-browsing-data', async (event, options) => {
+  if (!mainWindow) return false;
+  const ses = session.defaultSession;
+
+  try {
+    if (options.cache) {
+      await ses.clearCache();
+    }
+    if (options.cookies) {
+      await ses.clearStorageData({ storages: ['cookies'] });
+    }
+    if (options.localStorage) {
+      await ses.clearStorageData({ storages: ['localstorage'] });
+    }
+    if (options.sessionStorage) {
+      await ses.clearStorageData({ storages: ['sessionstorage'] });
+    }
+    if (options.indexedDB) {
+      await ses.clearStorageData({ storages: ['indexdb'] });
+    }
+
+    // Resetear todos los contadores
+    privacyStats = { trackersBlocked: 0, cookiesBlocked: 0, dataSavedBytes: 0 };
+    pagePrivacyStats.clear();
+
+    return true;
+  } catch (err) {
+    console.error('Error clearing data:', err);
+    return false;
+  }
 });

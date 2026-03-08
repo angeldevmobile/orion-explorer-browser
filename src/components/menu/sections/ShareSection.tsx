@@ -29,32 +29,63 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
     setQrDataUrl(qrUrl);
   };
 
-  const handleCopyInQr = () => {
-    navigator.clipboard.writeText(currentUrl);
-    setCopiedInQr(true);
-    setTimeout(() => setCopiedInQr(false), 2000);
+  const handleCopyInQr = async () => {
+    try {
+      // Copiar la imagen QR al portapapeles
+      const response = await fetch(qrDataUrl!);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob }),
+      ]);
+      setCopiedInQr(true);
+      setTimeout(() => setCopiedInQr(false), 2000);
+    } catch {
+      // Fallback: copiar la URL
+      navigator.clipboard.writeText(currentUrl);
+      setCopiedInQr(true);
+      setTimeout(() => setCopiedInQr(false), 2000);
+    }
   };
 
-  const handleDownloadQr = () => {
+  const handleDownloadQr = async () => {
     if (!qrDataUrl) return;
-    const link = document.createElement("a");
-    link.href = qrDataUrl;
-    link.download = "qr-code.png";
-    link.click();
-    setDownloaded(true);
-    setTimeout(() => setDownloaded(false), 2000);
+    try {
+      const response = await fetch(qrDataUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = "qr-code.png";
+      link.click();
+      URL.revokeObjectURL(blobUrl);
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 2000);
+    } catch {
+      // Fallback: abrir en nueva pestaña
+      window.open(qrDataUrl, "_blank");
+    }
   };
 
   const handleShareQr = async () => {
-    if (!navigator.share) {
-      handleCopyInQr();
-      return;
-    }
     try {
-      await navigator.share({ title: "Compartir enlace", url: currentUrl });
+      const response = await fetch(qrDataUrl!);
+      const blob = await response.blob();
+      const file = new File([blob], "qr-code.png", { type: blob.type });
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: "Código QR",
+          text: currentUrl,
+          files: [file],
+        });
+        return;
+      }
     } catch {
-      /* usuario canceló */
+      /* fallback abajo */
     }
+    // Fallback: copiar URL
+    navigator.clipboard.writeText(currentUrl);
+    setCopiedInQr(true);
+    setTimeout(() => setCopiedInQr(false), 2000);
   };
 
   const handleSendToPhone = () => {
@@ -147,21 +178,21 @@ export function ShareSection({ currentUrl, onClose }: ShareSectionProps) {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-all"
             >
               {copiedInQr ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-              {copiedInQr ? "¡Copiado!" : "Copiar"}
+              {copiedInQr ? "¡Copiado!" : "Copiar QR"}
             </button>
             <button
               onClick={handleDownloadQr}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-all"
             >
               {downloaded ? <Check className="w-3 h-3 text-emerald-400" /> : <Download className="w-3 h-3" />}
-              {downloaded ? "¡Descargado!" : "Descargar"}
+              {downloaded ? "¡Guardado!" : "Guardar QR"}
             </button>
             <button
               onClick={handleShareQr}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.08] transition-all"
             >
               <Share2 className="w-3 h-3" />
-              Compartir
+              Enviar QR
             </button>
           </div>
           <button
