@@ -25,6 +25,7 @@ model User {
   siteVisits     SiteVisit[]
   preferences    UserPreference?
   hourlyActivities HourlyActivity[]
+  tabGroups  TabGroup[]
 }
 
 model Favorite {
@@ -55,9 +56,22 @@ model Tab {
   url       String
   title     String
   favicon   String?
+  groupId   String?
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model TabGroup {
+  id        String   @id @default(cuid())
+  name      String
+  color     String
+  collapsed Boolean  @default(false)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }

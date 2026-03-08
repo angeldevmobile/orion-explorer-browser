@@ -32,6 +32,7 @@ import {
 	authService,
 	statsService,
 } from "@/services/api";
+import { tabGroupService } from "@/services/api";
 
 interface Tab {
 	id: string;
@@ -115,6 +116,7 @@ export const BrowserWindow = () => {
 	useEffect(() => {
 		loadTabs();
 		loadRecentSearches();
+		loadTabGroups();
 	}, []);
 
 	useEffect(() => {
@@ -210,6 +212,31 @@ export const BrowserWindow = () => {
 			setLoading(false);
 		}
 	};
+
+	const loadTabGroups = useCallback(async () => {
+		if (!isAuthenticated) return;
+		try {
+			const groups = await tabGroupService.getAll();
+			setTabGroups(
+				groups.map((g: TabGroup) => ({ ...g, collapsed: g.collapsed ?? false })),
+			);
+			// Actualizar groupId en tabs locales
+			const groupedTabIds = new Map<string, string>();
+			for (const g of groups) {
+				for (const tid of g.tabIds) {
+					groupedTabIds.set(tid, g.id);
+				}
+			}
+			setTabs((prev) =>
+				prev.map((t) => ({
+					...t,
+					groupId: groupedTabIds.get(t.id) || undefined,
+				})),
+			);
+		} catch {
+			/* silent */
+		}
+	}, [isAuthenticated]);
 
 	const handleNewTab = async () => {
 		const tempId = `temp-${Date.now()}`;
@@ -419,64 +446,107 @@ export const BrowserWindow = () => {
 	}, [workspaceMode]);
 
 	const handleCreateTabGroup = useCallback(
-		(name: string, color: string) => {
+		async (name: string, color: string, selectedTabIds: string[] = []) => {
+			const tabIds =
+				selectedTabIds.length > 0
+					? selectedTabIds
+					: activeTabId
+					? [activeTabId]
+					: [];
 			const group: TabGroup = {
-				id: `group-${Date.now()}`,
+				id: `temp-group-${Date.now()}`,
 				name,
 				color,
-				tabIds: activeTabId ? [activeTabId] : [],
+				tabIds,
 				collapsed: false,
 			};
+
+			// Optimistic update
 			setTabGroups((prev) => [...prev, group]);
-			if (activeTabId) {
-				setTabs((prev) =>
-					prev.map((t) =>
-						t.id === activeTabId ? { ...t, groupId: group.id } : t,
-					),
-				);
+			setTabs((prev) =>
+				prev.map((t) =>
+					tabIds.includes(t.id) ? { ...t, groupId: group.id } : t,
+				),
+			);
+
+			if (isAuthenticated) {
+				try {
+					const created = await tabGroupService.create({ name, color, tabIds });
+					// Reemplazar temp id con el real
+					setTabGroups((prev) =>
+						prev.map((g) =>
+							g.id === group.id ? { ...created, collapsed: false } : g,
+						),
+					);
+					setTabs((prev) =>
+						prev.map((t) =>
+							t.groupId === group.id ? { ...t, groupId: created.id } : t,
+						),
+					);
+				} catch {
+					/* keep optimistic */
+				}
 			}
 		},
-		[activeTabId],
+		[activeTabId, isAuthenticated],
 	);
 
-	const handleAddTabToGroup = useCallback((tabId: string, groupId: string) => {
-		setTabGroups((prev) =>
-			prev.map((g) =>
-				g.id === groupId && !g.tabIds.includes(tabId)
-					? { ...g, tabIds: [...g.tabIds, tabId] }
-					: g,
-			),
-		);
-		setTabs((prev) =>
-			prev.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
-		);
-	}, []);
+	const handleAddTabToGroup = useCallback(
+		async (tabId: string, groupId: string) => {
+			setTabGroups((prev) =>
+				prev.map((g) =>
+					g.id === groupId && !g.tabIds.includes(tabId)
+						? { ...g, tabIds: [...g.tabIds, tabId] }
+						: g,
+				),
+			);
+			setTabs((prev) =>
+				prev.map((t) => (t.id === tabId ? { ...t, groupId } : t)),
+			);
+			if (isAuthenticated) {
+				tabGroupService.addTab(groupId, tabId).catch(() => {});
+			}
+		},
+		[isAuthenticated],
+	);
 
-	const handleRemoveTabFromGroup = useCallback((tabId: string) => {
-		setTabGroups((prev) =>
-			prev.map((g) => ({
-				...g,
-				tabIds: g.tabIds.filter((id) => id !== tabId),
-			})),
-		);
-		setTabs((prev) =>
-			prev.map((t) => (t.id === tabId ? { ...t, groupId: undefined } : t)),
-		);
-	}, []);
+	const handleRemoveTabFromGroup = useCallback(
+		async (tabId: string) => {
+			setTabGroups((prev) =>
+				prev.map((g) => ({
+					...g,
+					tabIds: g.tabIds.filter((id) => id !== tabId),
+				})),
+			);
+			setTabs((prev) =>
+				prev.map((t) => (t.id === tabId ? { ...t, groupId: undefined } : t)),
+			);
+			if (isAuthenticated) {
+				tabGroupService.removeTab(tabId).catch(() => {});
+			}
+		},
+		[isAuthenticated],
+	);
+
+	const handleDeleteGroup = useCallback(
+		async (groupId: string) => {
+			setTabGroups((prev) => prev.filter((g) => g.id !== groupId));
+			setTabs((prev) =>
+				prev.map((t) =>
+					t.groupId === groupId ? { ...t, groupId: undefined } : t,
+				),
+			);
+			if (isAuthenticated) {
+				tabGroupService.delete(groupId).catch(() => {});
+			}
+		},
+		[isAuthenticated],
+	);
 
 	const handleToggleGroupCollapse = useCallback((groupId: string) => {
 		setTabGroups((prev) =>
 			prev.map((g) =>
 				g.id === groupId ? { ...g, collapsed: !g.collapsed } : g,
-			),
-		);
-	}, []);
-
-	const handleDeleteGroup = useCallback((groupId: string) => {
-		setTabGroups((prev) => prev.filter((g) => g.id !== groupId));
-		setTabs((prev) =>
-			prev.map((t) =>
-				t.groupId === groupId ? { ...t, groupId: undefined } : t,
 			),
 		);
 	}, []);

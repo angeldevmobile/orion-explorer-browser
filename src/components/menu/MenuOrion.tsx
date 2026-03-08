@@ -61,7 +61,7 @@ interface BrowserMenuProps {
 	}[];
 	tabs?: { id: string; title: string; url: string; groupId?: string }[];
 	activeTabId?: string;
-	onCreateTabGroup?: (name: string, color: string) => void;
+	onCreateTabGroup?: (name: string, color: string, tabIds?: string[]) => void;
 	onAddTabToGroup?: (tabId: string, groupId: string) => void;
 	onRemoveTabFromGroup?: (tabId: string) => void;
 	onDeleteGroup?: (groupId: string) => void;

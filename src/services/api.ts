@@ -137,6 +137,33 @@ export const tabService = {
   },
 };
 
+export const tabGroupService = {
+  getAll: async () => {
+    const response = await api.get('/tab-groups');
+    return response.data.data;
+  },
+
+  create: async (data: { name: string; color: string; tabIds: string[] }) => {
+    const response = await api.post('/tab-groups', data);
+    return response.data.data;
+  },
+
+  addTab: async (groupId: string, tabId: string) => {
+    const response = await api.post(`/tab-groups/${groupId}/tabs`, { tabId });
+    return response.data;
+  },
+
+  removeTab: async (tabId: string) => {
+    const response = await api.delete(`/tab-groups/tabs/${tabId}`);
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/tab-groups/${id}`);
+    return response.data;
+  },
+};
+
 // Favorite Services
 export const favoriteService = {
   getFavorites: async (): Promise<Favorite[]> => {

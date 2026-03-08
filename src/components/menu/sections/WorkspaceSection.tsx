@@ -1,4 +1,4 @@
-import { Columns, PanelLeft, Maximize2, Layers, Moon, Sun, Monitor, Plus, X, ChevronDown } from "lucide-react";
+import { Columns, PanelLeft, Maximize2, Layers, Moon, Sun, Monitor, Plus, X, Check } from "lucide-react";
 import { MenuContent, ToolCard } from "./ShareSectionUtils";
 import type { UserPrefs } from "@/hooks/useMenuData";
 import { useState } from "react";
@@ -16,7 +16,7 @@ interface WorkspaceSectionProps {
   tabGroups?: { id: string; name: string; color: string; tabIds: string[]; collapsed: boolean }[];
   tabs?: { id: string; title: string; url: string; groupId?: string }[];
   activeTabId?: string;
-  onCreateTabGroup?: (name: string, color: string) => void;
+  onCreateTabGroup?: (name: string, color: string, tabIds?: string[]) => void;
   onAddTabToGroup?: (tabId: string, groupId: string) => void;
   onRemoveTabFromGroup?: (tabId: string) => void;
   onDeleteGroup?: (groupId: string) => void;
@@ -28,7 +28,6 @@ export function WorkspaceSection({
   onClose,
   onSplitView,
   onSidePanel,
-  onTabGroups,
   workspaceMode = "normal",
   tabGroups = [],
   tabs = [],
@@ -42,16 +41,25 @@ export function WorkspaceSection({
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0]);
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [selectedTabIds, setSelectedTabIds] = useState<string[]>([]);
+
+  const ungroupedTabs = tabs.filter((t) => !t.groupId);
+
+  const toggleTabSelection = (tabId: string) => {
+    setSelectedTabIds((prev) =>
+      prev.includes(tabId) ? prev.filter((id) => id !== tabId) : [...prev, tabId]
+    );
+  };
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) return;
-    onCreateTabGroup?.(newGroupName.trim(), newGroupColor);
+    const tabIds = selectedTabIds.length > 0 ? selectedTabIds : undefined;
+    onCreateTabGroup?.(newGroupName.trim(), newGroupColor, tabIds);
     setNewGroupName("");
     setNewGroupColor(GROUP_COLORS[0]);
+    setSelectedTabIds([]);
     setShowNewGroup(false);
   };
-
-  const ungroupedTabs = tabs.filter((t) => !t.groupId);
 
   return (
     <MenuContent title="Espacio de trabajo" subtitle="Organiza tu pantalla">
@@ -109,14 +117,17 @@ export function WorkspaceSection({
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-bold text-slate-300">Grupos de pestañas</p>
             <button
-              onClick={() => setShowNewGroup(!showNewGroup)}
+              onClick={() => {
+                setShowNewGroup(!showNewGroup);
+                setSelectedTabIds([]);
+              }}
               className="flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors"
             >
               <Plus className="w-3 h-3" /> Nuevo grupo
             </button>
           </div>
 
-          {/* Formulario nuevo grupo */}
+          {/* Formulario nuevo grupo CON selección múltiple */}
           {showNewGroup && (
             <div className="mb-3 p-3 rounded-lg bg-white/[0.03] border border-white/[0.08]">
               <input
@@ -128,7 +139,9 @@ export function WorkspaceSection({
                 className="w-full text-xs bg-transparent border-b border-white/10 pb-1.5 mb-2 text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/30"
                 maxLength={20}
               />
-              <div className="flex items-center gap-3">
+
+              {/* Color picker */}
+              <div className="flex items-center gap-3 mb-3">
                 <div className="flex gap-1.5">
                   {GROUP_COLORS.map((c) => (
                     <button
@@ -141,19 +154,68 @@ export function WorkspaceSection({
                     />
                   ))}
                 </div>
-                <button
-                  onClick={handleCreateGroup}
-                  disabled={!newGroupName.trim()}
-                  className="ml-auto px-3 py-1 text-[10px] font-medium rounded-md bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  Crear
-                </button>
               </div>
+
+              {/* Selección de pestañas */}
+              {tabs.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1.5">
+                    Seleccionar pestañas ({selectedTabIds.length} de {tabs.length})
+                  </p>
+                  <div className="max-h-32 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                    {tabs.map((tab) => {
+                      const isSelected = selectedTabIds.includes(tab.id);
+                      const isInOtherGroup = tab.groupId && !isSelected;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => !isInOtherGroup && toggleTabSelection(tab.id)}
+                          disabled={!!isInOtherGroup}
+                          className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-all ${
+                            isSelected
+                              ? "bg-cyan-500/10 border border-cyan-500/20"
+                              : isInOtherGroup
+                                ? "opacity-30 cursor-not-allowed border border-transparent"
+                                : "hover:bg-white/[0.04] border border-transparent"
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
+                              isSelected
+                                ? "bg-cyan-500 border-cyan-500"
+                                : "border-white/20 bg-transparent"
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                          </div>
+                          <span className="text-[10px] text-slate-400 truncate flex-1">
+                            {tab.title}
+                          </span>
+                          {tab.id === activeTabId && (
+                            <span className="text-[8px] text-cyan-500 flex-shrink-0">activa</span>
+                          )}
+                          {isInOtherGroup && (
+                            <span className="text-[8px] text-slate-600 flex-shrink-0">en grupo</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleCreateGroup}
+                disabled={!newGroupName.trim()}
+                className="w-full py-1.5 text-[11px] font-medium rounded-md bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Crear grupo{selectedTabIds.length > 0 ? ` con ${selectedTabIds.length} pestaña(s)` : ""}
+              </button>
             </div>
           )}
 
           {/* Lista de grupos existentes */}
-          {tabGroups.length === 0 ? (
+          {tabGroups.length === 0 && !showNewGroup ? (
             <p className="text-[11px] text-slate-600 text-center py-3">
               No hay grupos creados. Crea uno para organizar tus pestañas.
             </p>
@@ -192,7 +254,6 @@ export function WorkspaceSection({
                         ))}
                       </div>
                     )}
-                    {/* Agregar tab al grupo */}
                     {ungroupedTabs.length > 0 && (
                       <div className="px-3 pb-2">
                         <select
