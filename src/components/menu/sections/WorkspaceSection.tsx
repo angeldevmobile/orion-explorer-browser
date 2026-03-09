@@ -400,7 +400,7 @@ export function WorkspaceSection({
 													backgroundColor: `${group.color}15`,
 													color: group.color,
 												}}>
-												{groupTabs.length}
+												{groupTabs.length + (group.savedTabs?.length ?? 0)}
 											</span>
 											{isExpanded ? (
 												<ChevronDown className="w-3.5 h-3.5 text-slate-500" />

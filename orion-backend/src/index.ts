@@ -22,6 +22,7 @@ import focusRoutes from "./routes/focusRoutes";
 import statsRoutes from "./routes/statsRoutes";
 import preferencesRoutes from "./routes/preferencesRoutes";
 import tabGroupRoutes from "./routes/tabGroupRoutes";
+import mediaRoutes from "./routes/mediaRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -50,7 +51,7 @@ app.use("/api/focus", focusRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/preferences", preferencesRoutes);
 app.use("/api/tab-groups", tabGroupRoutes);
-
+app.use("/api/media", mediaRoutes); 
 // Health Check
 app.get("/api/health", async (_req, res) => {
   try {

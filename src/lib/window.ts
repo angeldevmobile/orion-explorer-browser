@@ -61,6 +61,20 @@ declare global {
         indexedDB?: boolean;
       }) => Promise<boolean>;
 
+      getPageMedia: () => Promise<Array<{
+        type: 'image' | 'video' | 'audio';
+        src: string;
+        alt?: string;
+        width?: number;
+        height?: number;
+        poster?: string;
+        duration?: number;
+      }>>;
+      downloadMedia: (data: { url: string; filename?: string }) => Promise<{ success: boolean; path?: string; size?: number }>;
+      downloadMediaBulk: (items: Array<{ src: string; alt?: string }>) => Promise<{ success: boolean; downloaded?: number; total?: number }>;
+      captureTabAudio: () => Promise<{ sourceId: string | null }>;
+      getCurrentUrl: () => Promise<string>;
+
       // Eventos de privacidad en tiempo real
       onPrivacyBlocked: (callback: (data: PrivacyBlockedEvent) => void) => void;
       removePrivacyBlockedListener: () => void;

@@ -68,6 +68,31 @@ export interface VoiceQueryResponse {
   };
 }
 
+export interface DetectedSong {
+  id: string;
+  title: string;
+  artist: string;
+  album?: string;
+  coverUrl?: string;
+  previewUrl?: string;
+  sourceUrl: string;
+  confidence: number;
+  genre?: string;
+  year?: string;
+  enrichment?: string;
+  createdAt: string;
+}
+
+export interface MediaItem {
+  type: 'image' | 'video' | 'audio';
+  src: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  poster?: string;
+  duration?: number;
+}
+
 export interface PageSummary {
   success: boolean;
   summary: string;
@@ -206,6 +231,33 @@ export const historyService = {
   clearHistory: async () => {
     const response = await api.delete('/history');
     return response.data;
+  },
+};
+
+export const mediaService = {
+  detectSong: async (audioBase64: string, sourceUrl: string) => {
+    const response = await api.post('/media/detect-song', { audioBase64, sourceUrl });
+    return response.data;
+  },
+
+  getSongHistory: async (): Promise<DetectedSong[]> => {
+    const response = await api.get('/media/songs');
+    return response.data.data;
+  },
+
+  deleteSong: async (id: string) => {
+    const response = await api.delete(`/media/songs/${id}`);
+    return response.data;
+  },
+
+  recordDownload: async (data: { url: string; title: string; type: string; size?: number; sourceUrl: string }) => {
+    const response = await api.post('/media/downloads', data);
+    return response.data;
+  },
+
+  getDownloadHistory: async () => {
+    const response = await api.get('/media/downloads');
+    return response.data.data;
   },
 };
 

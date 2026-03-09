@@ -590,6 +590,16 @@ export const BrowserWindow = () => {
 		[isAuthenticated],
 	);
 
+	const handleRemoveSavedTab = useCallback((groupId: string, index: number) => {
+		setTabGroups((prev) =>
+			prev.map((g) =>
+				g.id === groupId
+					? { ...g, savedTabs: g.savedTabs.filter((_, i) => i !== index) }
+					: g,
+			),
+		);
+	}, []);
+
 	const handleRemoveTabFromGroup = useCallback(
 		async (tabId: string) => {
 			setTabGroups((prev) =>
@@ -960,6 +970,8 @@ export const BrowserWindow = () => {
 					setActiveTabId(tabId);
 					setIsMenuOpen(false);
 				}}
+				onReopenGroupTab={handleReopenGroupTab}
+				onRemoveSavedTab={handleRemoveSavedTab}
 			/>
 		</div>
 	);

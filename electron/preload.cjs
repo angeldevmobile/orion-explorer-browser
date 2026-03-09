@@ -33,6 +33,13 @@ contextBridge.exposeInMainWorld('electron', {
   // HTML
   getPageSource: () => ipcRenderer.invoke('get-page-source'),
 
+  // ═══ NUEVO: Media ═══
+  getPageMedia: () => ipcRenderer.invoke('get-page-media'),
+  downloadMedia: (data) => ipcRenderer.invoke('download-media', data),
+  downloadMediaBulk: (items) => ipcRenderer.invoke('download-media-bulk', items),
+  captureTabAudio: () => ipcRenderer.invoke('capture-tab-audio'),
+  getCurrentUrl: () => ipcRenderer.invoke('get-current-url'),
+
   // Privacidad
   updatePrivacyPrefs: (prefs) => ipcRenderer.invoke('update-privacy-prefs', prefs),
   getPrivacyStats: () => ipcRenderer.invoke('get-privacy-stats'),
@@ -40,7 +47,7 @@ contextBridge.exposeInMainWorld('electron', {
   resetPagePrivacyStats: (hostname) => ipcRenderer.invoke('reset-page-privacy-stats', hostname),
   clearBrowsingData: (options) => ipcRenderer.invoke('clear-browsing-data', options),
 
-  // Escuchar eventos de bloqueo en tiempo real
+  // Eventos de privacidad en tiempo real
   onPrivacyBlocked: (callback) => {
     ipcRenderer.on('privacy-blocked', (event, data) => callback(data));
   },

@@ -543,7 +543,6 @@ ipcMain.handle('get-page-privacy-stats', (event, hostname) => {
   return pagePrivacyStats.get(hostname) || { trackersBlocked: 0, cookiesBlocked: 0, dataSavedBytes: 0 };
 });
 
-// NUEVO: Resetear stats de una página (cuando navega a otra URL)
 ipcMain.handle('reset-page-privacy-stats', (event, hostname) => {
   pagePrivacyStats.delete(hostname);
   return true;
@@ -579,4 +578,181 @@ ipcMain.handle('clear-browsing-data', async (event, options) => {
     console.error('Error clearing data:', err);
     return false;
   }
+});
+
+// ═══ IPC: Media Gallery - Escanear medios de la página ═══
+ipcMain.handle('get-page-media', async () => {
+  if (!mainWindow) return [];
+  const allWC = webContents.getAllWebContents();
+  const guest = allWC.find(wc => wc.getType() === 'webview');
+  const target = guest || mainWindow.webContents;
+  
+  try {
+    return await target.executeJavaScript(`
+      (() => {
+        const seen = new Set();
+        const media = [];
+        
+        // Imágenes (filtrar las pequeñas/iconos)
+        document.querySelectorAll('img[src]').forEach(img => {
+          const src = img.src;
+          if (!seen.has(src) && img.naturalWidth > 80 && img.naturalHeight > 80) {
+            seen.add(src);
+            media.push({
+              type: 'image',
+              src,
+              alt: img.alt || '',
+              width: img.naturalWidth,
+              height: img.naturalHeight
+            });
+          }
+        });
+        
+        // Videos
+        document.querySelectorAll('video').forEach(v => {
+          const src = v.src || v.querySelector('source')?.src;
+          if (src && !seen.has(src)) {
+            seen.add(src);
+            media.push({
+              type: 'video',
+              src,
+              poster: v.poster || '',
+              duration: v.duration || 0
+            });
+          }
+        });
+        
+        // Audio
+        document.querySelectorAll('audio').forEach(a => {
+          const src = a.src || a.querySelector('source')?.src;
+          if (src && !seen.has(src)) {
+            seen.add(src);
+            media.push({
+              type: 'audio',
+              src,
+              duration: a.duration || 0
+            });
+          }
+        });
+        
+        // Background images grandes
+        document.querySelectorAll('[style*="background-image"]').forEach(el => {
+          const match = el.style.backgroundImage.match(/url\\(["']?([^"')]+)["']?\\)/);
+          if (match && match[1] && !seen.has(match[1])) {
+            seen.add(match[1]);
+            media.push({ type: 'image', src: match[1], alt: 'bg', width: 0, height: 0 });
+          }
+        });
+        
+        return media;
+      })()
+    `);
+  } catch {
+    return [];
+  }
+});
+
+// ═══ IPC: Descargar un archivo de media ═══
+ipcMain.handle('download-media', async (event, { url, filename }) => {
+  if (!mainWindow) return { success: false };
+  try {
+    const ext = path.extname(new URL(url).pathname) || '.jpg';
+    const defaultName = filename || ('media_' + Date.now() + ext);
+    
+    const { canceled, filePath: savePath } = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: defaultName,
+      filters: [
+        { name: 'Todos los archivos', extensions: ['*'] },
+        { name: 'Imágenes', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'] },
+        { name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'avi'] },
+        { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'aac'] },
+      ],
+    });
+    
+    if (canceled || !savePath) return { success: false };
+
+    // Descargar con fetch nativo de Node
+    const { net } = require('electron');
+    const request = net.request(url);
+    
+    return new Promise((resolve) => {
+      request.on('response', (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          fs.writeFileSync(savePath, buffer);
+          resolve({ success: true, path: savePath, size: buffer.length });
+        });
+      });
+      request.on('error', () => resolve({ success: false }));
+      request.end();
+    });
+  } catch {
+    return { success: false };
+  }
+});
+
+// ═══ IPC: Descargar múltiples archivos ═══
+ipcMain.handle('download-media-bulk', async (event, items) => {
+  if (!mainWindow) return { success: false };
+  
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Selecciona carpeta de destino',
+  });
+  
+  if (canceled || !filePaths[0]) return { success: false };
+  const destDir = filePaths[0];
+  
+  const { net } = require('electron');
+  const results = [];
+  
+  for (const item of items) {
+    try {
+      const ext = path.extname(new URL(item.src).pathname) || '.jpg';
+      const filename = (item.alt || 'media_' + Date.now()) + ext;
+      const safeName = filename.replace(/[<>:"/\\|?*]/g, '_');
+      const fullPath = path.join(destDir, safeName);
+      
+      await new Promise((resolve, reject) => {
+        const request = net.request(item.src);
+        request.on('response', (response) => {
+          const chunks = [];
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => {
+            fs.writeFileSync(fullPath, Buffer.concat(chunks));
+            resolve();
+          });
+        });
+        request.on('error', reject);
+        request.end();
+      });
+      results.push({ success: true, src: item.src });
+    } catch {
+      results.push({ success: false, src: item.src });
+    }
+  }
+  
+  return { success: true, downloaded: results.filter(r => r.success).length, total: items.length };
+});
+
+// ═══ IPC: Capturar audio del tab (para detección de canciones) ═══
+ipcMain.handle('capture-tab-audio', async () => {
+  // Capturar audio del tab usando desktopCapturer
+  try {
+    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1, height: 1 } });
+    const orionSource = sources.find(s => s.name.includes('Orion'));
+    return { sourceId: orionSource?.id || null };
+  } catch {
+    return { sourceId: null };
+  }
+});
+
+// ═══ IPC: Obtener URL actual del webview ═══
+ipcMain.handle('get-current-url', () => {
+  const allWC = webContents.getAllWebContents();
+  const guest = allWC.find(wc => wc.getType() === 'webview');
+  if (guest) return guest.getURL();
+  return mainWindow?.webContents.getURL() || '';
 });

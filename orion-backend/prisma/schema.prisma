@@ -26,6 +26,8 @@ model User {
   preferences    UserPreference?
   hourlyActivities HourlyActivity[]
   tabGroups  TabGroup[]
+  detectedSongs  DetectedSong[]
+  mediaDownloads MediaDownload[]
 }
 
 model Favorite {
@@ -163,4 +165,36 @@ model HourlyActivity {
   user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([date, hour, userId])
+}
+
+model DetectedSong {
+  id         String   @id @default(cuid())
+  title      String
+  artist     String
+  album      String?
+  coverUrl   String?
+  previewUrl String?
+  sourceUrl  String
+  confidence Float    @default(0)
+  genre      String?
+  year       String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model MediaDownload {
+  id        String   @id @default(cuid())
+  url       String
+  title     String
+  type      String   // "image" | "video" | "audio"
+  size      Int?
+  sourceUrl String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
