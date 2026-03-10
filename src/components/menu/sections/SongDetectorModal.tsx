@@ -6,9 +6,11 @@ import { mediaService, type DetectedSong } from "@/services/api";
 interface SongDetectorModalProps {
   open: boolean;
   onClose: () => void;
+  currentUrl: string;
+  currentTitle?: string;
 }
 
-export function SongDetectorModal({ open, onClose }: SongDetectorModalProps) {
+export function SongDetectorModal({ open, onClose, currentUrl, currentTitle }: SongDetectorModalProps) {
   const { toast } = useToast();
   const [detecting, setDetecting] = useState(false);
   const [currentSong, setCurrentSong] = useState<DetectedSong | null>(null);
@@ -37,16 +39,7 @@ export function SongDetectorModal({ open, onClose }: SongDetectorModalProps) {
     setCurrentSong(null);
 
     try {
-      // Obtener URL actual
-      let sourceUrl = window.location.href;
-      if (window.electron?.getCurrentUrl) {
-        sourceUrl = await window.electron.getCurrentUrl();
-      }
-
-      // Capturar audio real si estamos en Electron
-      const audioBase64 = await captureAudioFromTab();
-
-      const result = await mediaService.detectSong(audioBase64, sourceUrl);
+      const result = await mediaService.detectSong('', currentUrl, currentTitle);
 
       if (result.success && result.song) {
         setCurrentSong(result.song);
@@ -91,7 +84,6 @@ export function SongDetectorModal({ open, onClose }: SongDetectorModalProps) {
 
         {/* Detector */}
         <div className="p-5 flex flex-col items-center">
-          {/* Botón de escucha animado */}
           <button
             onClick={handleDetect}
             disabled={detecting}
@@ -110,10 +102,9 @@ export function SongDetectorModal({ open, onClose }: SongDetectorModalProps) {
             <Disc3 className={`w-12 h-12 text-pink-400 ${detecting ? "animate-spin" : ""}`} />
           </button>
           <p className="mt-3 text-sm text-slate-400">
-            {detecting ? "Escuchando…" : "Toca para identificar la canción"}
+            {detecting ? "Analizando página…" : "Toca para identificar la canción"}
           </p>
 
-          {/* Resultado actual */}
           {currentSong && (
             <div className="mt-5 w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.08]">
               <div className="flex gap-3">
@@ -216,64 +207,4 @@ export function SongDetectorModal({ open, onClose }: SongDetectorModalProps) {
       </div>
     </div>
   );
-}
-
-// Función para capturar audio de la pestaña
-/**
- * Intenta capturar ~5s de audio del tab via Electron desktopCapturer.
- * Si no está en Electron o falla, retorna '' (el backend usará solo la URL con Gemini).
- */
-async function captureAudioFromTab(durationMs = 5000): Promise<string> {
-  if (!window.electron?.captureTabAudio) return '';
-
-  try {
-    const { sourceId } = await window.electron.captureTabAudio();
-    if (!sourceId) return '';
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: sourceId,
-        },
-      } as unknown as MediaTrackConstraints,
-      video: false,
-    });
-
-    return new Promise<string>((resolve) => {
-      const recorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm',
-      });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1] || '');
-        };
-        reader.readAsDataURL(blob);
-      };
-
-      recorder.onerror = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        resolve('');
-      };
-
-      recorder.start();
-      setTimeout(() => {
-        if (recorder.state === 'recording') recorder.stop();
-      }, durationMs);
-    });
-  } catch {
-    return '';
-  }
 }

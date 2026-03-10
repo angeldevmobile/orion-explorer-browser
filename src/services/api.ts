@@ -235,8 +235,8 @@ export const historyService = {
 };
 
 export const mediaService = {
-  detectSong: async (audioBase64: string, sourceUrl: string) => {
-    const response = await api.post('/media/detect-song', { audioBase64, sourceUrl });
+  detectSong: async (audioBase64: string, sourceUrl: string, pageTitle?: string) => {
+    const response = await api.post('/media/detect-song', { audioBase64, sourceUrl, pageTitle });
     return response.data;
   },
 

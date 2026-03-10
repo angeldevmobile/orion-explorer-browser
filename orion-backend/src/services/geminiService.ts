@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export class GeminiService {
-  private model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+  private model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   private conversationHistory: Array<{ role: string; content: string }> = [];
 
   async processVoiceQuery(query: string, context?: Record<string, unknown>) {

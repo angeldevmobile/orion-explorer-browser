@@ -944,6 +944,7 @@ export const BrowserWindow = () => {
 					setIsMenuOpen(false);
 				}}
 				currentUrl={activeTab?.url || ""}
+				currentTitle={activeTab?.title}
 				currentZoom={currentZoom}
 				onZoomChange={setCurrentZoom}
 				onViewSource={(html, url) => {

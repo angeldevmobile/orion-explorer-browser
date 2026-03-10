@@ -7,7 +7,7 @@ export class MediaController {
   // ─── Detectar canción ───
   async detectSong(req: AuthenticatedRequest, res: Response) {
     try {
-      const { audioBase64, sourceUrl } = req.body;
+      const { audioBase64, sourceUrl, pageTitle } = req.body;
       const userId = req.userId!;
 
       if (!sourceUrl) {
@@ -16,7 +16,8 @@ export class MediaController {
 
       const result = await songDetectionService.identifyFromAudio(
         audioBase64 || '',
-        sourceUrl
+        sourceUrl,
+        pageTitle
       );
 
       // Auto-guardar si se encontró
@@ -30,7 +31,7 @@ export class MediaController {
           sourceUrl: result.sourceUrl,
           confidence: result.confidence,
           genre: result.genre || undefined,
-          year: result.year || undefined,
+          year: result.year != null ? String(result.year) : undefined,
           userId,
         }, prisma);
 

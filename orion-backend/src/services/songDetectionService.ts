@@ -4,19 +4,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export class SongDetectionService {
-  private model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+  private model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
   /**
    * Identifica una canción usando Gemini a partir de la letra/descripción capturada
    * y opcionalmente audio fingerprint via AudD API
    */
-  async identifyFromAudio(audioBase64: string, sourceUrl: string) {
-    // Si hay API key de AudD, usar fingerprinting real
+  async identifyFromAudio(audioBase64: string, sourceUrl: string, pageTitle?: string) {
     if (process.env.AUDD_API_KEY) {
       return this.identifyWithAudD(audioBase64, sourceUrl);
     }
-    // Fallback: usar Gemini para analizar el contexto de la página
-    return this.identifyWithGemini(sourceUrl);
+    return this.identifyWithGemini(sourceUrl, pageTitle);
   }
 
   /**
@@ -61,22 +59,24 @@ export class SongDetectionService {
   /**
    * Fallback: Gemini analiza la URL/contexto para identificar qué suena
    */
-  private async identifyWithGemini(sourceUrl: string) {
+  private async identifyWithGemini(sourceUrl: string, pageTitle?: string) {
     const prompt = `
-      Analiza esta URL y determina qué canción podría estar reproduciéndose:
+      Identifica qué canción se está reproduciendo basándote en esta información:
       URL: ${sourceUrl}
+      ${pageTitle ? `Título de la página: ${pageTitle}` : ''}
       
-      Si es YouTube, Spotify, SoundCloud u otro servicio de música, extrae la información del título/URL.
+      Si es YouTube, Spotify, SoundCloud u otro servicio de música, usa el título de la página 
+      como fuente principal (es más confiable que la URL para playlists/radios).
       
-      RESPONDE SOLO EN JSON VÁLIDO:
+      RESPONDE SOLO EN JSON VÁLIDO, sin markdown ni backticks:
       {
-        "found": true/false,
+        "found": true,
         "title": "nombre de la canción",
         "artist": "artista",
         "album": "álbum si lo conoces",
         "genre": "género musical",
-        "year": "año de lanzamiento",
-        "confidence": 0.0-1.0,
+        "year": "año como string",
+        "confidence": 0.9,
         "funFact": "un dato curioso sobre la canción"
       }
     `;
@@ -89,6 +89,7 @@ export class SongDetectionService {
     const parsed = JSON.parse(jsonMatch[0]);
     return {
       ...parsed,
+      year: parsed.year != null ? String(parsed.year) : null,
       sourceUrl,
       coverUrl: null,
       previewUrl: null,

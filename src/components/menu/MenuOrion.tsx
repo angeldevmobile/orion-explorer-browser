@@ -40,6 +40,7 @@ interface BrowserMenuProps {
 	onClose: () => void;
 	onNavigate: (url: string) => void;
 	currentUrl: string;
+	currentTitle?: string;
 	currentZoom?: number;
 	onZoomChange?: (zoom: number) => void;
 	onFocusChange?: (
@@ -128,6 +129,7 @@ export const BrowserMenu = ({
 	onClose,
 	onNavigate,
 	currentUrl,
+	currentTitle,
 	currentZoom = 100,
 	onZoomChange,
 	onFocusChange,
@@ -518,7 +520,7 @@ export const BrowserMenu = ({
 						/>
 					)}
 					{!loading && activeSection === "media" && (
-						<MediaSection onClose={onClose} />
+						<MediaSection currentUrl={currentUrl} currentTitle={currentTitle} onClose={onClose} />
 					)}
 					{!loading && activeSection === "devtools" && (
 						<DevToolsSection

@@ -7,10 +7,12 @@ import { SongDetectorModal } from "./SongDetectorModal";
 import { useMediaGallery } from "@/hooks/useMediaGallery";
 
 interface MediaSectionProps {
+  currentUrl: string;
+  currentTitle?: string;
   onClose: () => void;
 }
 
-export function MediaSection({ onClose }: MediaSectionProps) {
+export function MediaSection({ currentUrl, currentTitle, onClose }: MediaSectionProps) {
   const { toast } = useToast();
   const [isMuted, setIsMuted] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
@@ -143,7 +145,7 @@ export function MediaSection({ onClose }: MediaSectionProps) {
 
       {/* Modales */}
       <MediaGalleryModal open={showGallery} onClose={() => setShowGallery(false)} />
-      <SongDetectorModal open={showSongDetector} onClose={() => setShowSongDetector(false)} />
+      <SongDetectorModal open={showSongDetector} onClose={() => setShowSongDetector(false)} currentUrl={currentUrl} currentTitle={currentTitle} />
     </>
   );
 }
