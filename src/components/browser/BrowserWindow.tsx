@@ -499,14 +499,46 @@ export const BrowserWindow = () => {
 		);
 	};
 
-	const updateActiveTab = (
-		field: "title" | "favicon" | "url",
-		value: string,
-	) => {
-		setTabs((prev) =>
-			prev.map((t) => (t.id === activeTabId ? { ...t, [field]: value } : t)),
-		);
-	};
+	const updateTab = useCallback(
+		(tabId: string, field: "title" | "favicon" | "url", value: string) => {
+			setTabs((prev) =>
+				prev.map((t) => (t.id === tabId ? { ...t, [field]: value } : t)),
+			);
+		},
+		[],
+	);
+
+	const handleTabUrlChange = useCallback(
+		(tabId: string, newUrl: string) => {
+			updateTab(tabId, "url", newUrl);
+			if (
+				isAuthenticated &&
+				!tabId.startsWith("temp-") &&
+				!tabId.startsWith("default")
+			) {
+				try {
+					const parsedUrl = new URL(newUrl);
+					const domain = parsedUrl.hostname;
+					const isSearchEngine =
+						(domain.includes("google.") &&
+							parsedUrl.pathname.startsWith("/search")) ||
+						(domain.includes("bing.") &&
+							parsedUrl.pathname.startsWith("/search")) ||
+						domain === "search.yahoo.com" ||
+						domain.includes("duckduckgo.com");
+					if (!newUrl.startsWith("orion://") && !isSearchEngine) {
+						statsService.recordVisit(domain).catch(() => {});
+						historyService
+							.addHistory({ url: newUrl, title: domain })
+							.catch(() => {});
+					}
+				} catch {
+					/* URL inválida */
+				}
+			}
+		},
+		[isAuthenticated, updateTab],
+	);
 
 	const handleSplitView = useCallback(() => {
 		setWorkspaceMode((prev) => (prev === "split" ? "normal" : "split"));
@@ -801,138 +833,142 @@ export const BrowserWindow = () => {
 
 			{/* ═══ Content ═══ */}
 			<div className="flex-1 overflow-hidden relative bg-[#0a0e1a]">
-				{isBlocked ? (
-					<FocusBlockedPage
-						domain={blockedDomain || ""}
-						timeRemaining={focusTimeRemaining}
-						onGoBack={() => handleNavigate("orion://newtab")}
-					/>
-				) : (
+				<div
+					className={`w-full h-full flex ${
+						workspaceMode === "split"
+							? "flex-row"
+							: workspaceMode === "sidebar"
+							? "flex-row"
+							: ""
+					}`}>
+					{/* Panel principal */}
 					<div
-						className={`w-full h-full flex ${
+						className={`h-full overflow-hidden relative ${
 							workspaceMode === "split"
-								? "flex-row"
+								? "w-1/2"
 								: workspaceMode === "sidebar"
-								? "flex-row"
-								: ""
+								? "flex-1"
+								: "w-full"
 						}`}>
-						{/* Panel principal */}
-						<div
-							className={`h-full overflow-hidden ${
-								workspaceMode === "split"
-									? "w-1/2"
-									: workspaceMode === "sidebar"
-									? "flex-1"
-									: "w-full"
-							}`}>
-							{activeTab?.url === "orion://view-source" && viewSourceHtml ? (
-								<ViewSourcePage html={viewSourceHtml} url={viewSourceUrl} />
-							) : showWebView ? (
-								<WebView
-									url={activeTab!.url}
-									onTitleUpdate={(title) => updateActiveTab("title", title)}
-									onFaviconUpdate={(favicon) =>
-										updateActiveTab("favicon", favicon)
-									}
-									onUrlChange={(newUrl) => {
-										updateActiveTab("url", newUrl);
-										if (
-											isAuthenticated &&
-											!activeTabId.startsWith("temp-") &&
-											!activeTabId.startsWith("default")
-										) {
-											try {
-												const parsedUrl = new URL(newUrl);
-												const domain = parsedUrl.hostname;
-												const isSearchEngine =
-													(domain.includes("google.") &&
-														parsedUrl.pathname.startsWith("/search")) ||
-													(domain.includes("bing.") &&
-														parsedUrl.pathname.startsWith("/search")) ||
-													domain === "search.yahoo.com" ||
-													domain.includes("duckduckgo.com");
-												if (!newUrl.startsWith("orion://") && !isSearchEngine) {
-													statsService.recordVisit(domain).catch(() => {});
-													historyService
-														.addHistory({ url: newUrl, title: domain })
-														.catch(() => {});
-												}
-											} catch {
-												/* URL inválida */
-											}
-										}
-									}}
-									className="w-full h-full"
-								/>
-							) : (
-								<NewTabPage
-									voiceState={voiceState}
-									transcription={transcription}
-									audioLevels={audioLevels}
-									suggestions={suggestions}
-									quickAccess={QUICK_ACCESS}
-									recentSearches={recentSearches}
-									onVoiceCommand={handleVoiceCommand}
-									onNavigate={handleNavigate}
-								/>
-							)}
-						</div>
-
-						{/* Divisor + Panel secundario */}
-						{workspaceMode !== "normal" && (
+						{isBlocked ? (
+							<FocusBlockedPage
+								domain={blockedDomain || ""}
+								timeRemaining={focusTimeRemaining}
+								onGoBack={() => handleNavigate("orion://newtab")}
+							/>
+						) : (
 							<>
-								<div
-									className={`flex-shrink-0 ${
-										workspaceMode === "split"
-											? "w-[3px] bg-cyan-500/20 hover:bg-cyan-500/40 cursor-col-resize"
-											: "w-[1px] bg-white/[0.08]"
-									}`}
-								/>
-								<div
-									className={`h-full overflow-hidden flex flex-col ${
-										workspaceMode === "split"
-											? "w-1/2"
-											: "w-[320px] flex-shrink-0"
-									}`}>
-									{/* Mini address bar del panel secundario */}
-									<div className="flex items-center gap-2 px-2 py-1.5 bg-[#0d1117] border-b border-white/[0.06]">
-										<input
-											type="text"
-											defaultValue={secondaryUrl}
-											onKeyDown={(e) => {
-												if (e.key === "Enter") {
-													const raw = (
-														e.target as HTMLInputElement
-													).value.trim();
-													const normalized =
-														raw.startsWith("http://") ||
-														raw.startsWith("https://")
-															? raw
-															: raw.includes(".") && !raw.includes(" ")
-															? `https://${raw}`
-															: `https://www.google.com/search?q=${encodeURIComponent(
-																	raw,
-															  )}`;
-													setSecondaryUrl(normalized);
+								{/* ── Un WebView persistente por cada pestaña web ──
+              Se ocultan visualmente pero NUNCA se desmontan,
+              así el audio/video sigue reproduciéndose en segundo plano */}
+								{tabs.map((tab) => {
+									const isWebTab =
+										tab.url.startsWith("http://") ||
+										tab.url.startsWith("https://");
+									if (!isWebTab) return null;
+									const isActive = tab.id === activeTabId;
+									return (
+										<div
+											key={tab.id}
+											className="absolute inset-0"
+											style={{
+												visibility: isActive ? "visible" : "hidden",
+												pointerEvents: isActive ? "auto" : "none",
+											}}>
+											<WebView
+												url={tab.url}
+												onTitleUpdate={(title) =>
+													updateTab(tab.id, "title", title)
 												}
-											}}
-											className="flex-1 text-xs bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1 text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/30"
-											placeholder="URL del panel..."
+												onFaviconUpdate={(favicon) =>
+													updateTab(tab.id, "favicon", favicon)
+												}
+												onUrlChange={(newUrl) =>
+													handleTabUrlChange(tab.id, newUrl)
+												}
+												className="w-full h-full"
+											/>
+										</div>
+									);
+								})}
+
+								{/* View Source */}
+								{activeTab?.url === "orion://view-source" && viewSourceHtml && (
+									<div className="absolute inset-0">
+										<ViewSourcePage html={viewSourceHtml} url={viewSourceUrl} />
+									</div>
+								)}
+
+								{/* Nueva pestaña / Bienvenido */}
+								{!showWebView && activeTab?.url !== "orion://view-source" && (
+									<div className="absolute inset-0">
+										<NewTabPage
+											voiceState={voiceState}
+											transcription={transcription}
+											audioLevels={audioLevels}
+											suggestions={suggestions}
+											quickAccess={QUICK_ACCESS}
+											recentSearches={recentSearches}
+											onVoiceCommand={handleVoiceCommand}
+											onNavigate={handleNavigate}
 										/>
-										<button
-											onClick={() => setWorkspaceMode("normal")}
-											className="text-slate-600 hover:text-slate-300 text-xs px-1">
-											✕
-										</button>
 									</div>
-									<div className="flex-1">
-										<WebView url={secondaryUrl} className="w-full h-full" />
-									</div>
-								</div>
+								)}
 							</>
 						)}
 					</div>
-				)}
+
+					{/* Divisor + Panel secundario */}
+					{workspaceMode !== "normal" && (
+						<>
+							<div
+								className={`flex-shrink-0 ${
+									workspaceMode === "split"
+										? "w-[3px] bg-cyan-500/20 hover:bg-cyan-500/40 cursor-col-resize"
+										: "w-[1px] bg-white/[0.08]"
+								}`}
+							/>
+							<div
+								className={`h-full overflow-hidden flex flex-col ${
+									workspaceMode === "split"
+										? "w-1/2"
+										: "w-[320px] flex-shrink-0"
+								}`}>
+								<div className="flex items-center gap-2 px-2 py-1.5 bg-[#0d1117] border-b border-white/[0.06]">
+									<input
+										type="text"
+										defaultValue={secondaryUrl}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") {
+												const raw = (e.target as HTMLInputElement).value.trim();
+												const normalized =
+													raw.startsWith("http://") ||
+													raw.startsWith("https://")
+														? raw
+														: raw.includes(".") && !raw.includes(" ")
+														? `https://${raw}`
+														: `https://www.google.com/search?q=${encodeURIComponent(
+																raw,
+														  )}`;
+												setSecondaryUrl(normalized);
+											}
+										}}
+										className="flex-1 text-xs bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1 text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/30"
+										placeholder="URL del panel..."
+									/>
+									<button
+										onClick={() => setWorkspaceMode("normal")}
+										className="text-slate-600 hover:text-slate-300 text-xs px-1">
+										✕
+									</button>
+								</div>
+								<div className="flex-1">
+									<WebView url={secondaryUrl} className="w-full h-full" />
+								</div>
+							</div>
+						</>
+					)}
+				</div>
 			</div>
 
 			{/* ═══ Browser Menu (overlay) ═══ */}

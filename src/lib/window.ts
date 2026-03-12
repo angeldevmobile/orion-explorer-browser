@@ -46,7 +46,7 @@ declare global {
       isMuted: () => Promise<boolean>;
 
       // Obtener fuente de página
-      getPageSource: () => Promise<string | null>;
+      getPageSource: (activeUrl?: string) => Promise<string | null>;
 
       // Privacidad
       updatePrivacyPrefs: (prefs: Record<string, boolean>) => Promise<Record<string, boolean>>;
@@ -61,7 +61,7 @@ declare global {
         indexedDB?: boolean;
       }) => Promise<boolean>;
 
-      getPageMedia: () => Promise<Array<{
+      getPageMedia: (activeUrl?: string) => Promise<Array<{
         type: 'image' | 'video' | 'audio';
         src: string;
         alt?: string;
@@ -73,7 +73,7 @@ declare global {
       downloadMedia: (data: { url: string; filename?: string }) => Promise<{ success: boolean; path?: string; size?: number }>;
       downloadMediaBulk: (items: Array<{ src: string; alt?: string }>) => Promise<{ success: boolean; downloaded?: number; total?: number }>;
       captureTabAudio: () => Promise<{ sourceId: string | null }>;
-      getCurrentUrl: () => Promise<string>;
+      getCurrentUrl: (activeUrl?: string) => Promise<string>;
 
       // Eventos de privacidad en tiempo real
       onPrivacyBlocked: (callback: (data: PrivacyBlockedEvent) => void) => void;

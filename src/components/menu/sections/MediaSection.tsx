@@ -10,9 +10,10 @@ interface MediaSectionProps {
   currentUrl: string;
   currentTitle?: string;
   onClose: () => void;
+  tabs: { id: string; title: string; url: string; favicon?: string }[];
 }
 
-export function MediaSection({ currentUrl, currentTitle, onClose }: MediaSectionProps) {
+export function MediaSection({ currentUrl, currentTitle, onClose, tabs }: MediaSectionProps) {
   const { toast } = useToast();
   const [isMuted, setIsMuted] = useState(false);
   const [showGallery, setShowGallery] = useState(false);
@@ -145,7 +146,13 @@ export function MediaSection({ currentUrl, currentTitle, onClose }: MediaSection
 
       {/* Modales */}
       <MediaGalleryModal open={showGallery} onClose={() => setShowGallery(false)} />
-      <SongDetectorModal open={showSongDetector} onClose={() => setShowSongDetector(false)} currentUrl={currentUrl} currentTitle={currentTitle} />
+      <SongDetectorModal
+        open={showSongDetector}
+        onClose={() => setShowSongDetector(false)}
+        currentUrl={currentUrl}
+        currentTitle={currentTitle}
+        tabs={tabs}
+      />
     </>
   );
 }

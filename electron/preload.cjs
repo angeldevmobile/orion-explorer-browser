@@ -31,14 +31,9 @@ contextBridge.exposeInMainWorld('electron', {
   isMuted: () => ipcRenderer.invoke('is-muted'),
 
   // HTML
-  getPageSource: () => ipcRenderer.invoke('get-page-source'),
-
-  // ═══ NUEVO: Media ═══
-  getPageMedia: () => ipcRenderer.invoke('get-page-media'),
-  downloadMedia: (data) => ipcRenderer.invoke('download-media', data),
-  downloadMediaBulk: (items) => ipcRenderer.invoke('download-media-bulk', items),
-  captureTabAudio: () => ipcRenderer.invoke('capture-tab-audio'),
-  getCurrentUrl: () => ipcRenderer.invoke('get-current-url'),
+  getPageSource: (url) => ipcRenderer.invoke('get-page-source', url),
+  getPageMedia: (url) => ipcRenderer.invoke('get-page-media', url),
+  getCurrentUrl: (url) => ipcRenderer.invoke('get-current-url', url),
 
   // Privacidad
   updatePrivacyPrefs: (prefs) => ipcRenderer.invoke('update-privacy-prefs', prefs),

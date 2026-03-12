@@ -520,7 +520,7 @@ export const BrowserMenu = ({
 						/>
 					)}
 					{!loading && activeSection === "media" && (
-						<MediaSection currentUrl={currentUrl} currentTitle={currentTitle} onClose={onClose} />
+						<MediaSection currentUrl={currentUrl} currentTitle={currentTitle} onClose={onClose} tabs={allTabs} />
 					)}
 					{!loading && activeSection === "devtools" && (
 						<DevToolsSection

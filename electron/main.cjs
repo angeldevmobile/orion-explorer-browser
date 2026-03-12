@@ -498,10 +498,9 @@ ipcMain.handle('is-muted', () => {
 });
 
 // ═══ IPC: Page Source ═══
-ipcMain.handle('get-page-source', async () => {
+ipcMain.handle('get-page-source', async (event, targetUrl) => {
   if (!mainWindow) return null;
-  const allWC = webContents.getAllWebContents();
-  const guest = allWC.find(wc => wc.getType() === 'webview');
+  const guest = findWebView(targetUrl);
   if (guest) {
     return await guest.executeJavaScript('document.documentElement.outerHTML');
   }
@@ -581,61 +580,36 @@ ipcMain.handle('clear-browsing-data', async (event, options) => {
 });
 
 // ═══ IPC: Media Gallery - Escanear medios de la página ═══
-ipcMain.handle('get-page-media', async () => {
+ipcMain.handle('get-page-media', async (event, targetUrl) => {
   if (!mainWindow) return [];
-  const allWC = webContents.getAllWebContents();
-  const guest = allWC.find(wc => wc.getType() === 'webview');
-  const target = guest || mainWindow.webContents;
+  const target = findWebView(targetUrl) || mainWindow.webContents;
   
   try {
     return await target.executeJavaScript(`
       (() => {
         const seen = new Set();
         const media = [];
-        
-        // Imágenes (filtrar las pequeñas/iconos)
         document.querySelectorAll('img[src]').forEach(img => {
           const src = img.src;
           if (!seen.has(src) && img.naturalWidth > 80 && img.naturalHeight > 80) {
             seen.add(src);
-            media.push({
-              type: 'image',
-              src,
-              alt: img.alt || '',
-              width: img.naturalWidth,
-              height: img.naturalHeight
-            });
+            media.push({ type: 'image', src, alt: img.alt || '', width: img.naturalWidth, height: img.naturalHeight });
           }
         });
-        
-        // Videos
         document.querySelectorAll('video').forEach(v => {
           const src = v.src || v.querySelector('source')?.src;
           if (src && !seen.has(src)) {
             seen.add(src);
-            media.push({
-              type: 'video',
-              src,
-              poster: v.poster || '',
-              duration: v.duration || 0
-            });
+            media.push({ type: 'video', src, poster: v.poster || '', duration: v.duration || 0 });
           }
         });
-        
-        // Audio
         document.querySelectorAll('audio').forEach(a => {
           const src = a.src || a.querySelector('source')?.src;
           if (src && !seen.has(src)) {
             seen.add(src);
-            media.push({
-              type: 'audio',
-              src,
-              duration: a.duration || 0
-            });
+            media.push({ type: 'audio', src, duration: a.duration || 0 });
           }
         });
-        
-        // Background images grandes
         document.querySelectorAll('[style*="background-image"]').forEach(el => {
           const match = el.style.backgroundImage.match(/url\\(["']?([^"')]+)["']?\\)/);
           if (match && match[1] && !seen.has(match[1])) {
@@ -643,7 +617,6 @@ ipcMain.handle('get-page-media', async () => {
             media.push({ type: 'image', src: match[1], alt: 'bg', width: 0, height: 0 });
           }
         });
-        
         return media;
       })()
     `);
@@ -656,9 +629,51 @@ ipcMain.handle('get-page-media', async () => {
 ipcMain.handle('download-media', async (event, { url, filename }) => {
   if (!mainWindow) return { success: false };
   try {
+    if (url.startsWith('blob:')) {
+      const allWC = webContents.getAllWebContents();
+      const guest = allWC.find(wc => wc.getType() === 'webview');
+      const target = guest || mainWindow.webContents;
+
+      let dataUrl;
+      try {
+        // JSON.stringify evita inyección al embeber la URL en el script
+        dataUrl = await target.executeJavaScript(`
+          new Promise((resolve, reject) => {
+            fetch(${JSON.stringify(url)})
+              .then(r => r.blob())
+              .then(blob => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('FileReader error'));
+                reader.readAsDataURL(blob);
+              })
+              .catch(reject);
+          })
+        `);
+      } catch {
+        return { success: false };
+      }
+
+      const [header, base64data] = dataUrl.split(',');
+      const extMatch = header.match(/\/([a-z0-9]+);/i);
+      const ext = extMatch ? extMatch[1] : 'bin';
+      const defaultName = (filename || ('media_' + Date.now())) + '.' + ext;
+
+      const { canceled, filePath: savePath } = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: defaultName,
+        filters: [{ name: 'Todos los archivos', extensions: ['*'] }],
+      });
+      if (canceled || !savePath) return { success: false };
+
+      const buffer = Buffer.from(base64data, 'base64');
+      fs.writeFileSync(savePath, buffer);
+      return { success: true, path: savePath, size: buffer.length };
+    }
+
+    // ── URLs normales http/https ──
     const ext = path.extname(new URL(url).pathname) || '.jpg';
     const defaultName = filename || ('media_' + Date.now() + ext);
-    
+
     const { canceled, filePath: savePath } = await dialog.showSaveDialog(mainWindow, {
       defaultPath: defaultName,
       filters: [
@@ -668,13 +683,11 @@ ipcMain.handle('download-media', async (event, { url, filename }) => {
         { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'aac'] },
       ],
     });
-    
     if (canceled || !savePath) return { success: false };
 
-    // Descargar con fetch nativo de Node
     const { net } = require('electron');
     const request = net.request(url);
-    
+
     return new Promise((resolve) => {
       request.on('response', (response) => {
         const chunks = [];
@@ -750,9 +763,19 @@ ipcMain.handle('capture-tab-audio', async () => {
 });
 
 // ═══ IPC: Obtener URL actual del webview ═══
-ipcMain.handle('get-current-url', () => {
-  const allWC = webContents.getAllWebContents();
-  const guest = allWC.find(wc => wc.getType() === 'webview');
+ipcMain.handle('get-current-url', (event, targetUrl) => {
+  const guest = findWebView(targetUrl);
   if (guest) return guest.getURL();
   return mainWindow?.webContents.getURL() || '';
 });
+
+function findWebView(targetUrl) {
+  const allWC = webContents.getAllWebContents();
+  if (targetUrl) {
+    const match = allWC.find(
+      wc => wc.getType() === 'webview' && wc.getURL() === targetUrl
+    );
+    if (match) return match;
+  }
+  return allWC.find(wc => wc.getType() === 'webview') || null;
+}

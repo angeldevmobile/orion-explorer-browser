@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Download, CheckSquare, Square, Image, Video, Music2, ExternalLink } from "lucide-react";
 import { useMediaGallery } from "@/hooks/useMediaGallery";
 import type { MediaItem } from "@/services/api";
@@ -20,9 +20,9 @@ export function MediaGalleryModal({ open, onClose }: MediaGalleryModalProps) {
   const [tab, setTab] = useState<TabType>("all");
 
   // Auto-escanear al abrir
-  useState(() => {
+  useEffect(() => {
     if (open) scanPage();
-  });
+  }, [open, scanPage]);
 
   if (!open) return null;
 
@@ -102,7 +102,7 @@ export function MediaGalleryModal({ open, onClose }: MediaGalleryModalProps) {
             <div className="flex flex-col items-center justify-center h-40 text-slate-600">
               <Image className="w-10 h-10 mb-2" />
               <p className="text-sm">No se encontraron medios</p>
-              <button onClick={scanPage} className="mt-2 text-xs text-sky-400 hover:underline">
+              <button onClick={() => scanPage()} className="mt-2 text-xs text-sky-400 hover:underline">
                 Volver a escanear
               </button>
             </div>
@@ -194,19 +194,23 @@ function MediaCard({
         >
           <Download className="w-3.5 h-3.5 text-white" />
         </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); window.open(item.src, "_blank"); }}
-          className="p-1 rounded-md bg-white/10 hover:bg-white/20 transition"
-          title="Abrir"
-        >
-          <ExternalLink className="w-3.5 h-3.5 text-white" />
-        </button>
+
+        {/* Ocultar "abrir" para blob: URLs — no son accesibles fuera del webview */}
+        {!item.src.startsWith("blob:") && (
+          <button
+            onClick={(e) => { e.stopPropagation(); window.open(item.src, "_blank"); }}
+            className="p-1 rounded-md bg-white/10 hover:bg-white/20 transition"
+            title="Abrir en nueva pestaña"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-white" />
+          </button>
+        )}
       </div>
 
       {/* Type badge */}
       {item.type !== "image" && (
         <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[10px] text-slate-300 uppercase">
-          {item.type}
+          {item.src.startsWith("blob:") ? "stream" : item.type}
         </div>
       )}
     </div>

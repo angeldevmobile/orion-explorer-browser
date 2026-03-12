@@ -8,11 +8,11 @@ export function useMediaGallery() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
-  const scanPage = useCallback(async () => {
+  const scanPage = useCallback(async (activeUrl?: string) => {
     setLoading(true);
     try {
       if (window.electron?.getPageMedia) {
-        const items = await window.electron.getPageMedia();
+        const items = await window.electron.getPageMedia(activeUrl);
         setMedia(items);
         if (items.length === 0) {
           toast({ title: "No se encontraron medios en esta página" });
@@ -59,19 +59,43 @@ export function useMediaGallery() {
 
   const downloadSingle = useCallback(async (item: MediaItem) => {
     if (window.electron?.downloadMedia) {
-      const result = await window.electron.downloadMedia({ url: item.src, filename: item.alt });
+      const result = await window.electron.downloadMedia({
+        url: item.src,
+        filename: item.alt,
+      });
       if (result.success) {
         toast({ title: "Descarga completada" });
-        // Registrar en backend
-        const currentUrl = await window.electron.getCurrentUrl?.() || '';
-        mediaService.recordDownload({
-          url: item.src, title: item.alt || 'media', type: item.type,
-          size: result.size, sourceUrl: currentUrl,
-        }).catch(() => {});
+        const currentUrl = (await window.electron.getCurrentUrl?.()) || "";
+        mediaService
+          .recordDownload({
+            url: item.src,
+            title: item.alt || "media",
+            type: item.type,
+            size: result.size,
+            sourceUrl: currentUrl,
+          })
+          .catch(() => {});
+      } else {
+        toast({
+          title: "No se pudo descargar",
+          description:
+            item.src.startsWith("blob:")
+              ? "Este recurso es un stream protegido de la página"
+              : "Error al descargar el archivo",
+          variant: "destructive",
+        });
       }
     } else {
-      // Fallback: abrir en nueva pestaña
-      window.open(item.src, "_blank");
+      if (item.src.startsWith("blob:")) {
+        toast({
+          title: "No disponible",
+          description:
+            "Los streams solo pueden descargarse desde la app de escritorio",
+          variant: "destructive",
+        });
+      } else {
+        window.open(item.src, "_blank");
+      }
     }
   }, [toast]);
 
