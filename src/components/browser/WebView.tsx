@@ -59,6 +59,10 @@ export const WebView = ({
 
     webview.src = url;
     initialLoadDone.current = false;
+    if (loadTimeout.current) {
+      clearTimeout(loadTimeout.current);
+      loadTimeout.current = null;
+    }
     setIsLoading(true);
     setLoadError(false);
   }, [url]);
@@ -73,18 +77,23 @@ export const WebView = ({
         setIsLoading(true);
         setLoadError(false);
         onLoadStart?.();
+        if (loadTimeout.current) clearTimeout(loadTimeout.current);
       }
-      if (loadTimeout.current) clearTimeout(loadTimeout.current);
     };
 
-    const handleLoadStop = () => {
-      initialLoadDone.current = true;
-      if (loadTimeout.current) clearTimeout(loadTimeout.current);
+    const hideSpinner = () => {
+      if (loadTimeout.current) return; // already scheduled
       loadTimeout.current = setTimeout(() => {
+        loadTimeout.current = null;
+        initialLoadDone.current = true;
         setIsLoading(false);
         onLoadStop?.();
-      }, 200);
+      }, 150);
     };
+
+    const handleLoadStop = () => { hideSpinner(); };
+    const handleDomReady = () => { hideSpinner(); };
+    const handleDidFinishLoad = () => { hideSpinner(); };
 
     const handleTitleUpdated = (e: Event) => {
       onTitleUpdate?.((e as WebViewTitleEvent).title);
@@ -98,6 +107,16 @@ export const WebView = ({
     // ── Capturar la URL real tras navegación interna ──
     const handleDidNavigate = (e: Event) => {
       const navUrl = (e as Event & { url: string }).url;
+      console.log("[WebView] did-navigate →", navUrl);
+      if (navUrl) {
+        internalNavUrl.current = navUrl;
+        onUrlChange?.(navUrl);
+      }
+    };
+
+    const handleDidNavigateInPage = (e: Event) => {
+      const navUrl = (e as Event & { url: string }).url;
+      console.log("[WebView] did-navigate-in-page →", navUrl);
       if (navUrl) {
         internalNavUrl.current = navUrl;
         onUrlChange?.(navUrl);
@@ -107,6 +126,7 @@ export const WebView = ({
     // ── Links con target="_blank" → nueva pestaña en Orion ──
     const handleNewWindow = (e: Event) => {
       const newUrl = (e as Event & { url: string }).url;
+      console.log("[WebView] new-window →", newUrl);
       if (!newUrl) return;
       if (onNewWindow) {
         onNewWindow(newUrl);
@@ -117,6 +137,11 @@ export const WebView = ({
         setIsLoading(true);
         setLoadError(false);
       }
+    };
+
+    const handleWillNavigate = (e: Event) => {
+      const navUrl = (e as Event & { url: string }).url;
+      console.log("[WebView] will-navigate →", navUrl);
     };
 
     const handleError = (e: Event) => {
@@ -134,14 +159,17 @@ export const WebView = ({
         initialLoadDone.current = true;
         setIsLoading(false);
       }
-    }, 10000);
+    }, 4000);
 
     webview.addEventListener("did-start-loading", handleLoadStart);
     webview.addEventListener("did-stop-loading", handleLoadStop);
+    webview.addEventListener("dom-ready", handleDomReady);
+    webview.addEventListener("did-finish-load", handleDidFinishLoad);
     webview.addEventListener("page-title-updated", handleTitleUpdated);
     webview.addEventListener("page-favicon-updated", handleFaviconUpdated);
     webview.addEventListener("did-navigate", handleDidNavigate);
-    webview.addEventListener("did-navigate-in-page", handleDidNavigate);
+    webview.addEventListener("did-navigate-in-page", handleDidNavigateInPage);
+    webview.addEventListener("will-navigate", handleWillNavigate);
     webview.addEventListener("did-fail-load", handleError);
     webview.addEventListener("new-window", handleNewWindow);
 
@@ -150,14 +178,17 @@ export const WebView = ({
       if (loadTimeout.current) clearTimeout(loadTimeout.current);
       webview.removeEventListener("did-start-loading", handleLoadStart);
       webview.removeEventListener("did-stop-loading", handleLoadStop);
+      webview.removeEventListener("dom-ready", handleDomReady);
+      webview.removeEventListener("did-finish-load", handleDidFinishLoad);
       webview.removeEventListener("page-title-updated", handleTitleUpdated);
       webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
       webview.removeEventListener("did-navigate", handleDidNavigate);
-      webview.removeEventListener("did-navigate-in-page", handleDidNavigate);
+      webview.removeEventListener("did-navigate-in-page", handleDidNavigateInPage);
+      webview.removeEventListener("will-navigate", handleWillNavigate);
       webview.removeEventListener("did-fail-load", handleError);
       webview.removeEventListener("new-window", handleNewWindow);
     };
-  }, [onLoadStart, onLoadStop, onTitleUpdate, onFaviconUpdate, onUrlChange]);
+  }, [onLoadStart, onLoadStop, onTitleUpdate, onFaviconUpdate, onUrlChange, onNewWindow]);
 
   useEffect(() => {
     if (isElectron) return;

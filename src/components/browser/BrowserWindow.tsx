@@ -26,6 +26,8 @@ import { processVoiceQuery } from "@/services/geminiClient";
 import { FocusBlockedPage } from "@/pages/FocusBlockedPage";
 import { useFocusBlocker } from "@/hooks/useFocusBlocker";
 import { ViewSourcePage } from "./ViewSourcePage";
+import { OrionAIPage } from "./OrionAIPage";
+import { useNavigationHistory } from "@/hooks/useNavigationHistory";
 import {
 	tabService,
 	historyService,
@@ -115,11 +117,24 @@ export const BrowserWindow = () => {
 	});
 
 	const { toast } = useToast();
+	const navigation = useNavigationHistory("orion://welcome");
 
 	useEffect(() => {
 		loadTabs();
 		loadRecentSearches();
 		loadTabGroups();
+	}, []);
+
+	// ── Nuevas pestañas desde webview (target="_blank" / window.open en Electron 12+) ──
+	useEffect(() => {
+		if (!window.electron?.onOpenNewTab) return;
+		window.electron.onOpenNewTab((url: string) => {
+			if (!url || url === "about:blank") return;
+			const tempId = `temp-${Date.now()}`;
+			setTabs((prev) => [...prev, { id: tempId, title: url, url }]);
+			setActiveTabId(tempId);
+		});
+		return () => window.electron?.removeOpenNewTabListener?.();
 	}, []);
 
 	useEffect(() => {
@@ -363,31 +378,41 @@ export const BrowserWindow = () => {
 		[tabGroups, isAuthenticated],
 	);
 
-	const normalizeUrl = useCallback((raw: string): string => {
-		const url = raw.trim();
-		if (
-			url.startsWith("http://") ||
-			url.startsWith("https://") ||
-			url.startsWith("orion://")
-		)
-			return url;
-		// Multi-word → always search
-		if (url.includes(" "))
+	const normalizeUrl = useCallback(
+		(raw: string): string => {
+			const url = raw.trim();
+			if (
+				url.startsWith("http://") ||
+				url.startsWith("https://") ||
+				url.startsWith("orion://")
+			)
+				return url;
+			// Multi-word → always search
+			if (url.includes(" ")) return engineConfig.searchUrl(url);
+			// Has a dot → treat as domain (e.g. "youtube.com", "github.io")
+			if (url.includes(".")) return `https://${url}`;
+			// Single word without dot → search (e.g. "youtube" → search results)
 			return engineConfig.searchUrl(url);
-		// Has a dot → treat as domain (e.g. "youtube.com", "github.io")
-		if (url.includes("."))
-			return `https://${url}`;
-		// Single word without dot → navigate directly as .com (e.g. "youtube" → "youtube.com")
-		return `https://${url}.com`;
-	}, [engineConfig]);
+		},
+		[engineConfig],
+	);
 
 	const handleNavigate = useCallback(
 		async (url: string) => {
 			if (!activeTab) return;
 			const normalizedUrl = normalizeUrl(url);
-			const pageTitle = normalizedUrl.includes("://")
+			let pageTitle = normalizedUrl.includes("://")
 				? normalizedUrl.split("://")[1].split("/")[0]
 				: normalizedUrl;
+
+			// Better title for Orion AI pages
+			if (normalizedUrl.startsWith("orion://ai")) {
+				const q =
+					new URLSearchParams(normalizedUrl.split("?")[1] ?? "").get("q") ?? "";
+				pageTitle = q
+					? `✦ ${q.slice(0, 40)}${q.length > 40 ? "…" : ""}`
+					: "✦ Orion AI";
+			}
 
 			setTabs((prev) =>
 				prev.map((t) =>
@@ -397,6 +422,8 @@ export const BrowserWindow = () => {
 				),
 			);
 			saveRecentSearch(normalizedUrl);
+
+			navigation.push(normalizedUrl, pageTitle);
 
 			if (
 				isAuthenticated &&
@@ -426,7 +453,7 @@ export const BrowserWindow = () => {
 
 			toast({ title: "Navegando", description: `Cargando ${pageTitle}` });
 		},
-		[activeTab, activeTabId, isAuthenticated, toast, normalizeUrl],
+		[activeTab, activeTabId, isAuthenticated, toast, normalizeUrl, navigation], // 👈 AGREGAR navigation al dependency array
 	);
 
 	const handleRefresh = () =>
@@ -528,8 +555,6 @@ export const BrowserWindow = () => {
 					const domain = parsedUrl.hostname;
 					const isSearchEngine =
 						(domain.includes("google.") &&
-							parsedUrl.pathname.startsWith("/search")) ||
-						(domain.includes("bing.") &&
 							parsedUrl.pathname.startsWith("/search")) ||
 						domain === "search.yahoo.com" ||
 						domain.includes("duckduckgo.com");
@@ -798,10 +823,18 @@ export const BrowserWindow = () => {
 				{/* Navigation + Address bar */}
 				<div className="flex items-center gap-3 px-3 py-2.5 bg-browser-chrome border-t border-border">
 					<NavigationControls
-						canGoBack={false}
-						canGoForward={false}
-						onBack={() => toast({ title: "Atrás" })}
-						onForward={() => toast({ title: "Adelante" })}
+						canGoBack={navigation.canGoBack}
+						canGoForward={navigation.canGoForward}
+						onBack={() => {
+							navigation.back();
+							const prevUrl = navigation.history[navigation.currentIndex]?.url;
+							if (prevUrl) handleNavigate(prevUrl);
+						}}
+						onForward={() => {
+							navigation.forward();
+							const nextUrl = navigation.history[navigation.currentIndex]?.url;
+							if (nextUrl) handleNavigate(nextUrl);
+						}}
 						onHome={() => handleNavigate("orion://welcome")}
 						onMenu={() => setIsMenuOpen(!isMenuOpen)}
 					/>
@@ -887,9 +920,14 @@ export const BrowserWindow = () => {
 												onUrlChange={(newUrl) =>
 													handleTabUrlChange(tab.id, newUrl)
 												}
-												onNewWindow={(newUrl) =>
-													handleNavigate(newUrl)
-												}
+												onNewWindow={(newUrl) => {
+													const tempId = `temp-${Date.now()}`;
+													setTabs((prev) => [
+														...prev,
+														{ id: tempId, title: newUrl, url: newUrl },
+													]);
+													setActiveTabId(tempId);
+												}}
 												className="w-full h-full"
 											/>
 										</div>
@@ -903,21 +941,37 @@ export const BrowserWindow = () => {
 									</div>
 								)}
 
-								{/* Nueva pestaña / Bienvenido */}
-								{!showWebView && activeTab?.url !== "orion://view-source" && (
+								{/* Orion AI */}
+								{activeTab?.url.startsWith("orion://ai") && (
 									<div className="absolute inset-0">
-										<NewTabPage
-											voiceState={voiceState}
-											transcription={transcription}
-											audioLevels={audioLevels}
-											suggestions={suggestions}
-											quickAccess={QUICK_ACCESS}
-											recentSearches={recentSearches}
-											onVoiceCommand={handleVoiceCommand}
+										<OrionAIPage
+											query={
+												new URLSearchParams(
+													activeTab.url.split("?")[1] ?? "",
+												).get("q") ?? ""
+											}
 											onNavigate={handleNavigate}
 										/>
 									</div>
 								)}
+
+								{/* Nueva pestaña / Bienvenido */}
+								{!showWebView &&
+									activeTab?.url !== "orion://view-source" &&
+									!activeTab?.url.startsWith("orion://ai") && (
+										<div className="absolute inset-0">
+											<NewTabPage
+												voiceState={voiceState}
+												transcription={transcription}
+												audioLevels={audioLevels}
+												suggestions={suggestions}
+												quickAccess={QUICK_ACCESS}
+												recentSearches={recentSearches}
+												onVoiceCommand={handleVoiceCommand}
+												onNavigate={handleNavigate}
+											/>
+										</div>
+									)}
 							</>
 						)}
 					</div>

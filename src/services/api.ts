@@ -261,6 +261,29 @@ export const mediaService = {
   },
 };
 
+// AI Conversation History
+export const aiHistoryService = {
+  getHistory: async (limit = 50) => {
+    const response = await api.get(`/ai-history?limit=${limit}`);
+    return response.data.data as { id: string; query: string; response: string; createdAt: string }[];
+  },
+
+  save: async (query: string, response: string) => {
+    const res = await api.post('/ai-history', { query, response });
+    return res.data.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/ai-history/${id}`);
+    return response.data;
+  },
+
+  clear: async () => {
+    const response = await api.delete('/ai-history');
+    return response.data;
+  },
+};
+
 // Voice & AI Services
 export const voiceService = {
   processVoiceCommand: async (query: string, context?: Record<string, unknown>): Promise<VoiceQueryResponse> => {

@@ -81,6 +81,10 @@ declare global {
       // Eventos de privacidad en tiempo real
       onPrivacyBlocked: (callback: (data: PrivacyBlockedEvent) => void) => void;
       removePrivacyBlockedListener: () => void;
+
+      // Nueva pestaña desde webview (target="_blank" / window.open)
+      onOpenNewTab: (callback: (url: string) => void) => void;
+      removeOpenNewTabListener: () => void;
     };
   }
 }

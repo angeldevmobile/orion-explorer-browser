@@ -28,6 +28,7 @@ model User {
   tabGroups  TabGroup[]
   detectedSongs  DetectedSong[]
   mediaDownloads MediaDownload[]
+  aiConversations AiConversation[]
 }
 
 model Favorite {
@@ -192,6 +193,17 @@ model MediaDownload {
   type      String   // "image" | "video" | "audio"
   size      Int?
   sourceUrl String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AiConversation {
+  id        String   @id @default(cuid())
+  query     String
+  response  String   @db.Text
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

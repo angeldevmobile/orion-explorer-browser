@@ -52,4 +52,12 @@ contextBridge.exposeInMainWorld('electron', {
   removePrivacyBlockedListener: () => {
     ipcRenderer.removeAllListeners('privacy-blocked');
   },
+
+  // Nueva pestaña desde webview (target="_blank", window.open en Electron 12+)
+  onOpenNewTab: (callback) => {
+    ipcRenderer.on('open-new-tab', (event, url) => callback(url));
+  },
+  removeOpenNewTabListener: () => {
+    ipcRenderer.removeAllListeners('open-new-tab');
+  },
 });

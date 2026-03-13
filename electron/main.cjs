@@ -3,6 +3,23 @@ const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
 
+// ═══ Flags de Chromium: reducir consumo de RAM/CPU del proceso ═══
+app.commandLine.appendSwitch('disable-background-networking');         // No tráfico de fondo
+app.commandLine.appendSwitch('disable-default-apps');                  // Sin apps internas de Chrome
+app.commandLine.appendSwitch('disable-extensions');                    // Sin extensiones Chromium
+app.commandLine.appendSwitch('disable-sync');                          // Sin sincronización
+app.commandLine.appendSwitch('disable-translate');                     // Sin traductor integrado
+app.commandLine.appendSwitch('no-first-run');                          // Evitar tareas de primer arranque
+app.commandLine.appendSwitch('disable-client-side-phishing-detection');// Ahorra CPU de fondo
+app.commandLine.appendSwitch('disable-hang-monitor');                  // Sin monitor de cuelgues
+app.commandLine.appendSwitch('disable-prompt-on-repost');
+app.commandLine.appendSwitch('disable-domain-reliability');            // Sin reporte de dominios a Google
+app.commandLine.appendSwitch('no-pings');                              // Sin pings de hipervínculo
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256 --expose-gc'); // Límite heap + GC manual
+app.commandLine.appendSwitch('renderer-process-limit', '4');          // Máx. 4 procesos renderer en RAM
+app.commandLine.appendSwitch('enable-precise-memory-info');           // V8 reporta uso real de memoria
+app.commandLine.appendSwitch('aggressive-cache-discard');             // Libera caché de GPU más agresivamente
+
 let mainWindow;
 
 // ═══════════════════════════════════════════
@@ -27,8 +44,13 @@ let privacyStats = {
 // Stats POR PÁGINA (clave = hostname)
 const pagePrivacyStats = new Map();
 
+const PAGE_STATS_LIMIT = 100;
 function getPageStatsFor(hostname) {
   if (!pagePrivacyStats.has(hostname)) {
+    // Evitar crecimiento ilimitado: eliminar la entrada más antigua si se supera el límite
+    if (pagePrivacyStats.size >= PAGE_STATS_LIMIT) {
+      pagePrivacyStats.delete(pagePrivacyStats.keys().next().value);
+    }
     pagePrivacyStats.set(hostname, { trackersBlocked: 0, cookiesBlocked: 0, dataSavedBytes: 0 });
   }
   return pagePrivacyStats.get(hostname);
@@ -47,7 +69,7 @@ function getPageHostname(wcId) {
 
 // ═══ Listas de dominios (Disconnect.me core + extras) ═══
 
-const TRACKER_DOMAINS = [
+const TRACKER_DOMAINS = new Set([
   // ── Google ──
   'google-analytics.com', 'googletagmanager.com', 'analytics.google.com',
   'doubleclick.net', 'adservice.google.com', 'googlesyndication.com',
@@ -59,7 +81,9 @@ const TRACKER_DOMAINS = [
   'analytics.twitter.com', 'ads-twitter.com', 't.co', 'platform.twitter.com',
   'syndication.twitter.com', 'ads-api.twitter.com',
   // ── Microsoft ──
-  'bat.bing.com', 'clarity.ms', 'c.bing.com', 'c.msn.com',
+  // 'c.bing.com' y 'c.msn.com' eliminados: son APIs internas que Bing necesita
+  // para procesar clics en resultados de búsqueda.
+  'bat.bing.com', 'clarity.ms',
   // ── Analytics ──
   'hotjar.com', 'static.hotjar.com', 'vars.hotjar.com',
   'mixpanel.com', 'api.mixpanel.com', 'cdn.mxpnl.com',
@@ -120,9 +144,9 @@ const TRACKER_DOMAINS = [
   'appsflyer.com', 'onelink.me',
   'adjust.com', 'app.adjust.com',
   'kochava.com', 'singular.net',
-];
+]);
 
-const MINING_DOMAINS = [
+const MINING_DOMAINS = new Set([
   'coinhive.com', 'coin-hive.com', 'authedmine.com',
   'cryptoloot.pro', 'crypto-loot.com',
   'minero.cc', 'jsecoin.com', 'coinimp.com',
@@ -130,10 +154,16 @@ const MINING_DOMAINS = [
   'webminepool.com', 'minr.pw',
   'coinerra.com', 'coin-have.com', 'hashforcash.us',
   'monerominer.rocks', 'webmine.cz',
-];
+]);
 
-function isDomainMatch(hostname, domainList) {
-  return domainList.some(d => hostname === d || hostname.endsWith('.' + d));
+// Set lookup: O(1) para match exacto, luego comprueba subdominios solo si no hay match directo
+function isDomainMatch(hostname, domainSet) {
+  if (domainSet.has(hostname)) return true;
+  const parts = hostname.split('.');
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (domainSet.has(parts.slice(i).join('.'))) return true;
+  }
+  return false;
 }
 
 function estimateRequestSize(url) {
@@ -231,6 +261,8 @@ function createWindow() {
       enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.cjs'),
       webviewTag: true,
+      backgroundThrottling: true,   // Frena JS de tabs en segundo plano → menos CPU
+      spellcheck: false,            // Sin corrector ortográfico → menos RAM/CPU de fondo
     },
   });
 
@@ -240,8 +272,20 @@ function createWindow() {
 
   mainWindow.loadURL(startURL);
 
+  // ── Forzar allowpopups en todos los webviews ANTES de que se adjunten ──
+  // setAttribute después del montaje no funciona; will-attach-webview es el momento correcto.
+  mainWindow.webContents.on('will-attach-webview', (_event, _webPreferences, params) => {
+    params.allowpopups = true;
+    console.log('[Main] will-attach-webview: allowpopups forzado para', params.src);
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // Liberar memoria del sistema cuando la ventana se minimiza
+  mainWindow.on('minimize', () => {
+    if (global.gc) global.gc();
   });
 
   if (isDev) {
@@ -284,7 +328,6 @@ app.whenReady().then(() => {
           ps.trackersBlocked++;
           ps.dataSavedBytes += size;
         }
-        // Notificar al renderer para actualizar badge en tiempo real
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('privacy-blocked', {
             type: 'tracker',
@@ -293,7 +336,12 @@ app.whenReady().then(() => {
             pageStats: pageHost ? getPageStatsFor(pageHost) : null,
           });
         }
-        callback({ cancel: true });
+        // Usar redirectURL en vez de cancel:true para que fetch/XHR no lance excepción
+        // y no rompa el JS de la página (ej: Bing espera respuesta antes de navegar).
+        const emptyResponse = details.resourceType === 'image'
+          ? 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+          : 'data:text/plain,';
+        callback({ redirectURL: emptyResponse });
         return;
       }
 
@@ -315,7 +363,7 @@ app.whenReady().then(() => {
             pageStats: pageHost ? getPageStatsFor(pageHost) : null,
           });
         }
-        callback({ cancel: true });
+        callback({ redirectURL: 'data:text/plain,' });
         return;
       }
 
@@ -338,9 +386,19 @@ app.whenReady().then(() => {
     try {
       const responseHeaders = { ...details.responseHeaders };
       const requestUrl = new URL(details.url);
-      const mainUrl = mainWindow ? new URL(mainWindow.webContents.getURL()) : null;
+      // Use the webview's own URL (not the app shell) as the "first-party" context
+      let firstPartyHostname = null;
+      try {
+        const wc = webContents.fromId(details.webContentsId);
+        if (wc) firstPartyHostname = new URL(wc.getURL()).hostname;
+      } catch {}
+      if (!firstPartyHostname && mainWindow) {
+        try { firstPartyHostname = new URL(mainWindow.webContents.getURL()).hostname; } catch {}
+      }
 
-      if (mainUrl && requestUrl.hostname !== mainUrl.hostname) {
+      if (firstPartyHostname && requestUrl.hostname !== firstPartyHostname &&
+          !requestUrl.hostname.endsWith('.' + firstPartyHostname) &&
+          !firstPartyHostname.endsWith('.' + requestUrl.hostname)) {
         const hasCookies = responseHeaders['set-cookie'] || responseHeaders['Set-Cookie'];
         if (hasCookies) {
           delete responseHeaders['set-cookie'];
@@ -383,6 +441,29 @@ app.whenReady().then(() => {
       } catch {}
     }
   });
+});
+
+// ── Interceptar nuevas ventanas de webviews (target="_blank", window.open) ──
+// En Electron 12+, new-window está deprecado; se usa setWindowOpenHandler.
+app.on('web-contents-created', (_event, contents) => {
+  console.log('[Main] web-contents-created type:', contents.getType());
+  if (contents.getType() === 'webview') {
+    contents.setWindowOpenHandler(({ url, frameName, features }) => {
+      console.log('[Main] setWindowOpenHandler →', url, '| frame:', frameName, '| features:', features);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('open-new-tab', url);
+      }
+      return { action: 'deny' };
+    });
+
+    contents.on('will-navigate', (_e, url) => {
+      console.log('[Main] webview will-navigate →', url);
+    });
+
+    contents.on('did-navigate', (_e, url) => {
+      console.log('[Main] webview did-navigate →', url);
+    });
+  }
 });
 
 app.on('window-all-closed', () => {

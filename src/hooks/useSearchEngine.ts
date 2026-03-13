@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-export type SearchEngineId = "google" | "duckduckgo" | "brave" | "bing" | "ecosia";
+export type SearchEngineId = "google" | "duckduckgo" | "brave" | "ecosia" | "orion-ai";
 
 export interface SearchEngineConfig {
   id: SearchEngineId;
@@ -37,20 +37,20 @@ export const SEARCH_ENGINES: SearchEngineConfig[] = [
     letter: "B",
   },
   {
-    id: "bing",
-    name: "Bing",
-    searchUrl: (q) => `https://www.bing.com/search?q=${encodeURIComponent(q)}`,
-    color: "text-teal-400",
-    bgColor: "bg-teal-500/10 border-teal-500/20",
-    letter: "Bi",
-  },
-  {
     id: "ecosia",
     name: "Ecosia",
     searchUrl: (q) => `https://www.ecosia.org/search?q=${encodeURIComponent(q)}`,
     color: "text-green-400",
     bgColor: "bg-green-500/10 border-green-500/20",
     letter: "E",
+  },
+  {
+    id: "orion-ai",
+    name: "Orion AI",
+    searchUrl: (q) => `orion://ai?q=${encodeURIComponent(q)}`,
+    color: "text-cyan-400",
+    bgColor: "bg-cyan-500/10 border-cyan-500/20",
+    letter: "✦",
   },
 ];
 

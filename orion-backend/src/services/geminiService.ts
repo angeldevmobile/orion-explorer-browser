@@ -2,6 +2,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+// Gemini a veces envuelve el JSON en ```json ... ``` — esto lo limpia
+function parseGeminiJson(text: string): unknown {
+  const clean = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  return JSON.parse(clean);
+}
+
 export class GeminiService {
   private model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   private conversationHistory: Array<{ role: string; content: string }> = [];
@@ -94,12 +100,12 @@ export class GeminiService {
 
     const result = await this.model.generateContent(prompt);
     const response = await result.response;
-    const parsedResponse = JSON.parse(response.text());
+    const parsedResponse = parseGeminiJson(response.text()) as Record<string, unknown>;
 
     // Guardar respuesta en historial
     this.conversationHistory.push({
       role: 'assistant',
-      content: parsedResponse.response
+      content: parsedResponse.response as string
     });
 
     // Limitar historial a últimas 10 interacciones
@@ -134,7 +140,7 @@ export class GeminiService {
 
     const result = await this.model.generateContent(prompt);
     const response = await result.response;
-    return JSON.parse(response.text());
+    return parseGeminiJson(response.text());
   }
 
   async getContextualSuggestions(currentUrl: string, userActivity: Record<string, unknown>) {
@@ -160,7 +166,7 @@ export class GeminiService {
 
     const result = await this.model.generateContent(prompt);
     const response = await result.response;
-    return JSON.parse(response.text());
+    return parseGeminiJson(response.text());
   }
 
   async chatWithUser(message: string) {
@@ -184,10 +190,10 @@ export class GeminiService {
     const result = await this.model.generateContent(prompt);
     const response = await result.response;
     
-    const parsed = JSON.parse(response.text());
-    
+    const parsed = parseGeminiJson(response.text()) as Record<string, unknown>;
+
     this.conversationHistory.push({ role: 'user', content: message });
-    this.conversationHistory.push({ role: 'assistant', content: parsed.response });
+    this.conversationHistory.push({ role: 'assistant', content: parsed.response as string });
     
     return parsed;
   }
