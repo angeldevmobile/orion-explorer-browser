@@ -81,6 +81,10 @@ All colors MUST be HSL.
   }
   
   [data-theme="forest"] {
+    --background: 140 30% 8%;
+    --browser-chrome: 140 30% 9%;
+    --tab-active: 140 30% 13%;
+    --toolbar: 140 30% 11%;
     --primary: 140 70% 45%;
     --secondary: 160 65% 50%;
     --accent: 180 60% 55%;
@@ -89,7 +93,11 @@ All colors MUST be HSL.
     --gradient-secondary: linear-gradient(135deg, hsl(160 65% 50%), hsl(180 60% 55%));
   }
   
-  [data-theme="purple"] {
+  [data-theme="lavender"] {
+    --background: 280 25% 8%;
+    --browser-chrome: 280 25% 9%;
+    --tab-active: 280 25% 13%;
+    --toolbar: 280 25% 11%;
     --primary: 280 90% 65%;
     --secondary: 260 85% 60%;
     --accent: 300 80% 55%;
@@ -97,46 +105,170 @@ All colors MUST be HSL.
     --gradient-primary: linear-gradient(135deg, hsl(280 90% 65%), hsl(260 85% 60%));
     --gradient-secondary: linear-gradient(135deg, hsl(260 85% 60%), hsl(300 80% 55%));
   }
+  
+  [data-theme="amoled"] {
+    --background: 0 0% 0%;
+    --browser-chrome: 0 0% 2%;
+    --tab-active: 0 0% 8%;
+    --toolbar: 0 0% 3%;
+    --primary: 195 100% 55%;
+    --secondary: 200 90% 60%;
+    --accent: 210 95% 65%;
+    --orion-glow: 195 100% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 55%), hsl(200 90% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(200 90% 60%), hsl(210 95% 65%));
+  }
+  
+  [data-theme="arctic"] {
+    --background: 200 30% 8%;
+    --browser-chrome: 200 30% 9%;
+    --tab-active: 200 30% 13%;
+    --toolbar: 200 30% 11%;
+    --primary: 185 90% 60%;
+    --secondary: 200 80% 65%;
+    --accent: 215 85% 70%;
+    --orion-glow: 185 90% 60%;
+    --gradient-primary: linear-gradient(135deg, hsl(185 90% 60%), hsl(200 80% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(200 80% 65%), hsl(215 85% 70%));
+  }
 
-  .light {
-    --background: 225 25% 98%;
-    --foreground: 225 15% 12%;
+  [data-theme="aurora"] {
+    --background: 20 35% 8%;
+    --browser-chrome: 20 35% 9%;
+    --tab-active: 20 35% 13%;
+    --toolbar: 20 35% 11%;
+    --primary: 25 95% 60%;
+    --secondary: 45 100% 55%;
+    --accent: 65 100% 50%;
+    --orion-glow: 25 95% 60%;
+    --gradient-primary: linear-gradient(135deg, hsl(25 95% 60%), hsl(45 100% 55%));
+    --gradient-secondary: linear-gradient(135deg, hsl(45 100% 55%), hsl(65 100% 50%));
+  }
 
-    --card: 0 0% 100%;
-    --card-foreground: 225 15% 12%;
+  [data-theme="ocean"] {
+    --background: 200 25% 8%;
+    --browser-chrome: 200 25% 9%;
+    --tab-active: 200 25% 13%;
+    --toolbar: 200 25% 11%;
+    --primary: 195 100% 55%;
+    --secondary: 200 90% 60%;
+    --accent: 210 95% 65%;
+    --orion-glow: 195 100% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 55%), hsl(200 90% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(200 90% 60%), hsl(210 95% 65%));
+  }
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 225 15% 12%;
-
-    --primary: 195 100% 45%;
-    --primary-foreground: 0 0% 100%;
-
+  [data-theme="sunset"] {
+    --background: 25 35% 8%;
+    --browser-chrome: 25 35% 9%;
+    --tab-active: 25 35% 13%;
+    --toolbar: 25 35% 11%;
+    --primary: 25 95% 55%;
+    --secondary: 340 95% 60%;
+    --accent: 280 90% 65%;
+    --orion-glow: 25 95% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(25 95% 55%), hsl(340 95% 60%));
+    --gradient-secondary: linear-gradient(135deg, hsl(340 95% 60%), hsl(280 90% 65%));
+  }
+  
+  [data-theme="midnight"] {
+    --background: 215 25% 8%;
+    --browser-chrome: 215 25% 9%;
+    --tab-active: 215 25% 13%;
+    --toolbar: 215 25% 11%;
+    --primary: 195 100% 55%;
     --secondary: 280 90% 65%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 225 20% 94%;
-    --muted-foreground: 225 10% 40%;
-
     --accent: 340 95% 60%;
+    --orion-glow: 195 100% 55%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 55%), hsl(280 90% 65%));
+    --gradient-secondary: linear-gradient(135deg, hsl(280 90% 65%), hsl(340 95% 60%));
+  }
+
+  /* ── MODO CLARO BASE ── */
+  .light {
+    --background: 210 20% 97%;
+    --foreground: 215 25% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 10%;
+    --primary: 195 100% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 280 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 210 15% 92%;
+    --muted-foreground: 215 15% 42%;
+    --accent: 340 90% 52%;
     --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 85% 60%;
+    --destructive: 0 85% 55%;
     --destructive-foreground: 0 0% 100%;
+    --border: 215 15% 84%;
+    --input: 215 15% 88%;
+    --ring: 195 100% 38%;
+    --browser-chrome: 210 20% 93%;
+    --tab-active: 210 20% 98%;
+    --tab-inactive: 210 20% 91%;
+    --toolbar: 210 20% 95%;
+    --orion-glow: 195 100% 38%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 100% 38%), hsl(280 80% 55%));
+    --gradient-secondary: linear-gradient(135deg, hsl(280 80% 55%), hsl(340 90% 52%));
+  }
 
-    --border: 225 15% 88%;
-    --input: 225 15% 92%;
-    --ring: 195 100% 45%;
-    
-    /* Custom Orion light variables */
-    --browser-chrome: 225 25% 96%;
-    --tab-active: 0 0% 100%;
-    --tab-inactive: 225 20% 92%;
-    --toolbar: 0 0% 100%;
-    --orion-glow: 195 100% 45%;
-    
-    --gradient-mesh: radial-gradient(at 40% 20%, hsl(195 100% 45% / 0.15) 0px, transparent 50%),
-                     radial-gradient(at 80% 0%, hsl(280 90% 65% / 0.15) 0px, transparent 50%),
-                     radial-gradient(at 0% 50%, hsl(340 95% 60% / 0.1) 0px, transparent 50%);
+  /* ── TEMAS EN MODO CLARO ── */
+  .light[data-theme="midnight"], .light [data-theme="midnight"] {
+    --background: 210 20% 97%;
+    --browser-chrome: 210 20% 93%;
+    --primary: 195 100% 36%;
+    --orion-glow: 195 100% 36%;
+  }
+  .light[data-theme="aurora"], .light [data-theme="aurora"] {
+    --background: 270 30% 97%;
+    --browser-chrome: 270 25% 93%;
+    --primary: 270 75% 52%;
+    --orion-glow: 270 75% 52%;
+    --gradient-primary: linear-gradient(135deg, hsl(270 75% 52%), hsl(150 65% 42%));
+  }
+  .light[data-theme="ocean"], .light [data-theme="ocean"] {
+    --background: 205 40% 97%;
+    --browser-chrome: 205 35% 93%;
+    --primary: 210 90% 44%;
+    --orion-glow: 210 90% 44%;
+    --gradient-primary: linear-gradient(135deg, hsl(210 90% 44%), hsl(195 90% 40%));
+  }
+  .light[data-theme="sunset"], .light [data-theme="sunset"] {
+    --background: 30 50% 97%;
+    --browser-chrome: 30 40% 93%;
+    --primary: 22 90% 48%;
+    --orion-glow: 22 90% 48%;
+    --gradient-primary: linear-gradient(135deg, hsl(22 90% 48%), hsl(340 90% 52%));
+  }
+  .light[data-theme="forest"], .light [data-theme="forest"] {
+    --background: 140 30% 97%;
+    --browser-chrome: 140 25% 93%;
+    --primary: 145 60% 36%;
+    --orion-glow: 145 60% 36%;
+    --gradient-primary: linear-gradient(135deg, hsl(145 60% 36%), hsl(160 55% 40%));
+  }
+  .light[data-theme="lavender"], .light [data-theme="lavender"] {
+    --background: 275 35% 97%;
+    --browser-chrome: 275 28% 93%;
+    --primary: 275 75% 52%;
+    --orion-glow: 275 75% 52%;
+    --gradient-primary: linear-gradient(135deg, hsl(275 75% 52%), hsl(295 70% 50%));
+  }
+  .light[data-theme="amoled"], .light [data-theme="amoled"] {
+    --background: 0 0% 99%;
+    --browser-chrome: 0 0% 96%;
+    --primary: 0 0% 12%;
+    --orion-glow: 0 0% 20%;
+    --gradient-primary: linear-gradient(135deg, hsl(0 0% 12%), hsl(0 0% 30%));
+  }
+  .light[data-theme="arctic"], .light [data-theme="arctic"] {
+    --background: 195 40% 97%;
+    --browser-chrome: 195 35% 93%;
+    --primary: 195 80% 38%;
+    --orion-glow: 195 80% 38%;
+    --gradient-primary: linear-gradient(135deg, hsl(195 80% 38%), hsl(205 75% 42%));
   }
 }
 
@@ -186,4 +318,16 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Ocultar scrollbars en todo Webkit */
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: none;
 }

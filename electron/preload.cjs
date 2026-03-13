@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('electron', {
   resetPagePrivacyStats: (hostname) => ipcRenderer.invoke('reset-page-privacy-stats', hostname),
   clearBrowsingData: (options) => ipcRenderer.invoke('clear-browsing-data', options),
 
+  // Sugerencias de búsqueda
+  fetchSuggestions: (query, engine) => ipcRenderer.invoke('fetch-suggestions', query, engine),
+
   // Eventos de privacidad en tiempo real
   onPrivacyBlocked: (callback) => {
     ipcRenderer.on('privacy-blocked', (event, data) => callback(data));

@@ -75,6 +75,9 @@ declare global {
       captureTabAudio: () => Promise<{ sourceId: string | null }>;
       getCurrentUrl: (activeUrl?: string) => Promise<string>;
 
+      // Sugerencias de búsqueda
+      fetchSuggestions: (query: string, engine?: string) => Promise<string[]>;
+
       // Eventos de privacidad en tiempo real
       onPrivacyBlocked: (callback: (data: PrivacyBlockedEvent) => void) => void;
       removePrivacyBlockedListener: () => void;

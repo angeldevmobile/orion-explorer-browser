@@ -8,6 +8,7 @@ interface WebViewProps {
   onTitleUpdate?: (title: string) => void;
   onFaviconUpdate?: (favicon: string) => void;
   onUrlChange?: (url: string) => void;
+  onNewWindow?: (url: string) => void;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export const WebView = ({
   onTitleUpdate,
   onFaviconUpdate,
   onUrlChange,
+  onNewWindow,
   className = "w-full h-full",
 }: WebViewProps) => {
   const webviewRef = useRef<ElectronWebViewElement | null>(null);
@@ -102,6 +104,21 @@ export const WebView = ({
       }
     };
 
+    // ── Links con target="_blank" → nueva pestaña en Orion ──
+    const handleNewWindow = (e: Event) => {
+      const newUrl = (e as Event & { url: string }).url;
+      if (!newUrl) return;
+      if (onNewWindow) {
+        onNewWindow(newUrl);
+      } else {
+        // Fallback: navegar en la pestaña actual
+        webview.src = newUrl;
+        internalNavUrl.current = "";
+        setIsLoading(true);
+        setLoadError(false);
+      }
+    };
+
     const handleError = (e: Event) => {
       // ERR_ABORTED (-3) ocurre en navegación normal (redirects), ignorarlo
       const errorCode = (e as Event & { errorCode?: number }).errorCode;
@@ -126,6 +143,7 @@ export const WebView = ({
     webview.addEventListener("did-navigate", handleDidNavigate);
     webview.addEventListener("did-navigate-in-page", handleDidNavigate);
     webview.addEventListener("did-fail-load", handleError);
+    webview.addEventListener("new-window", handleNewWindow);
 
     return () => {
       clearTimeout(safetyTimeout);
@@ -133,13 +151,11 @@ export const WebView = ({
       webview.removeEventListener("did-start-loading", handleLoadStart);
       webview.removeEventListener("did-stop-loading", handleLoadStop);
       webview.removeEventListener("page-title-updated", handleTitleUpdated);
-      webview.removeEventListener(
-        "page-favicon-updated",
-        handleFaviconUpdated
-      );
+      webview.removeEventListener("page-favicon-updated", handleFaviconUpdated);
       webview.removeEventListener("did-navigate", handleDidNavigate);
       webview.removeEventListener("did-navigate-in-page", handleDidNavigate);
       webview.removeEventListener("did-fail-load", handleError);
+      webview.removeEventListener("new-window", handleNewWindow);
     };
   }, [onLoadStart, onLoadStop, onTitleUpdate, onFaviconUpdate, onUrlChange]);
 

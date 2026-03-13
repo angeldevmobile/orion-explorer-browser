@@ -762,6 +762,37 @@ ipcMain.handle('capture-tab-audio', async () => {
   }
 });
 
+// ═══ IPC: Sugerencias de búsqueda (proxy sin CORS, multi-motor) ═══
+ipcMain.handle('fetch-suggestions', async (_event, query, engine = 'google') => {
+  if (!query || !query.trim()) return [];
+  const q = encodeURIComponent(query.trim());
+  const { net } = require('electron');
+
+  const SUGGEST_URLS = {
+    google:     `https://suggestqueries.google.com/complete/search?client=firefox&q=${q}&hl=es`,
+    duckduckgo: `https://duckduckgo.com/ac/?q=${q}&type=list`,
+    brave:      `https://search.brave.com/api/suggest?q=${q}`,
+    bing:       `https://api.bing.com/osjson.aspx?query=${q}`,
+    ecosia:     `https://ac.ecosia.org/autocomplete?q=${q}&type=list`,
+  };
+
+  const url = SUGGEST_URLS[engine] || SUGGEST_URLS.google;
+
+  try {
+    const response = await net.fetch(url);
+    const data = await response.json();
+    // Brave devuelve {results:[{query}]}, el resto devuelve [query, [sugerencias]]
+    if (engine === 'brave') {
+      return Array.isArray(data.results)
+        ? data.results.map(r => r.query || r.title || '').filter(Boolean).slice(0, 8)
+        : [];
+    }
+    return Array.isArray(data[1]) ? data[1].slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+});
+
 // ═══ IPC: Obtener URL actual del webview ═══
 ipcMain.handle('get-current-url', (event, targetUrl) => {
   const guest = findWebView(targetUrl);

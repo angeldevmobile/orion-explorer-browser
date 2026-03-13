@@ -33,6 +33,7 @@ import {
 	statsService,
 } from "@/services/api";
 import { tabGroupService } from "@/services/api";
+import { useSearchEngine } from "@/hooks/useSearchEngine";
 
 interface Tab {
 	id: string;
@@ -73,6 +74,7 @@ const DEFAULT_TAB: Tab = {
 };
 
 export const BrowserWindow = () => {
+	const { config: engineConfig } = useSearchEngine();
 	const [tabs, setTabs] = useState<Tab[]>([]);
 	const [activeTabId, setActiveTabId] = useState("");
 	const [loading, setLoading] = useState(true);
@@ -361,7 +363,7 @@ export const BrowserWindow = () => {
 		[tabGroups, isAuthenticated],
 	);
 
-	const normalizeUrl = (raw: string): string => {
+	const normalizeUrl = useCallback((raw: string): string => {
 		const url = raw.trim();
 		if (
 			url.startsWith("http://") ||
@@ -369,10 +371,15 @@ export const BrowserWindow = () => {
 			url.startsWith("orion://")
 		)
 			return url;
-		if (url.includes(" ") || !url.includes("."))
-			return `https://www.google.com/search?q=${encodeURIComponent(url)}`;
-		return `https://${url}`;
-	};
+		// Multi-word → always search
+		if (url.includes(" "))
+			return engineConfig.searchUrl(url);
+		// Has a dot → treat as domain (e.g. "youtube.com", "github.io")
+		if (url.includes("."))
+			return `https://${url}`;
+		// Single word without dot → navigate directly as .com (e.g. "youtube" → "youtube.com")
+		return `https://${url}.com`;
+	}, [engineConfig]);
 
 	const handleNavigate = useCallback(
 		async (url: string) => {
@@ -419,7 +426,7 @@ export const BrowserWindow = () => {
 
 			toast({ title: "Navegando", description: `Cargando ${pageTitle}` });
 		},
-		[activeTab, activeTabId, isAuthenticated, toast],
+		[activeTab, activeTabId, isAuthenticated, toast, normalizeUrl],
 	);
 
 	const handleRefresh = () =>
@@ -675,7 +682,7 @@ export const BrowserWindow = () => {
 
 	if (loading) {
 		return (
-			<div className="flex flex-col items-center justify-center h-screen bg-[#0a0e1a] gap-4">
+			<div className="flex flex-col items-center justify-center h-screen bg-background gap-4">
 				<div className="relative">
 					<div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-400 animate-pulse" />
 					<div className="absolute inset-0 w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-400 blur-lg opacity-40 animate-pulse" />
@@ -704,98 +711,92 @@ export const BrowserWindow = () => {
 		activeTab?.url.startsWith("https://");
 
 	return (
-		<div className="flex flex-col h-screen bg-[#0a0e1a] overflow-hidden">
-			{/* ═══ Chrome Header ═══ */}
-			<div className="bg-[#0d1117] border-b border-white/[0.06] flex-shrink-0">
-				{/* Title bar (draggable) */}
+		<div className="flex flex-col h-screen bg-background overflow-hidden">
+			{/* ═══ Chrome Header (unificado) ═══ */}
+			<div className="bg-browser-chrome border-b border-border flex-shrink-0">
+				{/* Title bar + Tab strip unificados */}
 				<div
-					className="h-9 flex items-center px-4 bg-[#080b12]"
+					className="flex items-end px-2 pt-1 h-12 gap-0.5 bg-[hsl(var(--browser-chrome))] overflow-hidden"
 					style={{ WebkitAppRegion: "drag" } as React.CSSProperties}>
-					<div className="flex items-center gap-2.5 flex-1">
-						<div className="relative">
-							<div className="w-4 h-4 rounded-md bg-gradient-to-br from-cyan-500 to-teal-400" />
-							<div className="absolute inset-0 w-4 h-4 rounded-md bg-gradient-to-br from-cyan-500 to-teal-400 blur-sm opacity-40" />
-						</div>
-						<span className="text-[11px] font-semibold text-slate-400 tracking-wide">
-							ORION
-						</span>
+					{/* Pestañas — centro, crecen */}
+					<div
+						className="flex items-end gap-0.5 flex-1 overflow-x-hidden"
+						style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+						{/* Tabs agrupadas */}
+						{tabGroups.map((group) => {
+							const groupTabs = tabs.filter((t) => t.groupId === group.id);
+							if (groupTabs.length === 0) return null;
+							return (
+								<div key={group.id} className="flex items-end gap-0.5">
+									<button
+										onClick={() => handleToggleGroupCollapse(group.id)}
+										className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-t-md text-[10px] font-bold transition-all"
+										style={{
+											backgroundColor: `${group.color}20`,
+											color: group.color,
+										}}>
+										<span
+											className="w-2 h-2 rounded-full"
+											style={{ backgroundColor: group.color }}
+										/>
+										{group.name}
+										<span className="text-[9px] opacity-60">
+											{group.collapsed ? `(${groupTabs.length})` : ""}
+										</span>
+									</button>
+									{!group.collapsed &&
+										groupTabs.map((tab) => (
+											<BrowserTab
+												key={tab.id}
+												{...tab}
+												isActive={tab.id === activeTabId}
+												onSelect={() => setActiveTabId(tab.id)}
+												onClose={() => handleCloseTab(tab.id)}
+											/>
+										))}
+								</div>
+							);
+						})}
+
+						{/* Tabs sin grupo */}
+						{tabs
+							.filter((t) => !t.groupId)
+							.map((tab) => (
+								<BrowserTab
+									key={tab.id}
+									{...tab}
+									isActive={tab.id === activeTabId}
+									onSelect={() => setActiveTabId(tab.id)}
+									onClose={() => handleCloseTab(tab.id)}
+								/>
+							))}
+
+						<button
+							onClick={handleNewTab}
+							className="flex-shrink-0 w-8 h-8 mb-0.5 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-hoverBg transition-all duration-200">
+							<Plus className="h-4 w-4" />
+						</button>
+
+						{/* Indicador de modo workspace */}
+						{workspaceMode !== "normal" && (
+							<button
+								onClick={() => setWorkspaceMode("normal")}
+								className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all">
+								✕ {workspaceMode === "split" ? "Split" : "Panel"}
+							</button>
+						)}
 					</div>
-					<div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+
+					{/* Controles de ventana — derecha, anclados */}
+					<div
+						className="flex items-end gap-0.5 flex-shrink-0 pb-1.5 pl-2"
+						style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
 						<WindowControls />
 					</div>
 				</div>
 
-				{/* Tab strip */}
-				<div className="flex items-end px-2 pt-1.5 gap-0.5 bg-[#0b0f18] overflow-x-auto">
-					{/* Tabs agrupadas */}
-					{tabGroups.map((group) => {
-						const groupTabs = tabs.filter((t) => t.groupId === group.id);
-						if (groupTabs.length === 0) return null;
-						return (
-							<div key={group.id} className="flex items-end gap-0.5">
-								<button
-									onClick={() => handleToggleGroupCollapse(group.id)}
-									className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-t-md text-[10px] font-bold transition-all"
-									style={{
-										backgroundColor: `${group.color}20`,
-										color: group.color,
-									}}>
-									<span
-										className="w-2 h-2 rounded-full"
-										style={{ backgroundColor: group.color }}
-									/>
-									{group.name}
-									<span className="text-[9px] opacity-60">
-										{group.collapsed ? `(${groupTabs.length})` : ""}
-									</span>
-								</button>
-								{!group.collapsed &&
-									groupTabs.map((tab) => (
-										<BrowserTab
-											key={tab.id}
-											{...tab}
-											isActive={tab.id === activeTabId}
-											onSelect={() => setActiveTabId(tab.id)}
-											onClose={() => handleCloseTab(tab.id)}
-										/>
-									))}
-							</div>
-						);
-					})}
-
-					{/* Tabs sin grupo */}
-					{tabs
-						.filter((t) => !t.groupId)
-						.map((tab) => (
-							<BrowserTab
-								key={tab.id}
-								{...tab}
-								isActive={tab.id === activeTabId}
-								onSelect={() => setActiveTabId(tab.id)}
-								onClose={() => handleCloseTab(tab.id)}
-							/>
-						))}
-
-					<button
-						onClick={handleNewTab}
-						className="flex-shrink-0 w-8 h-8 mb-0.5 rounded-lg flex items-center justify-center text-slate-600 hover:text-cyan-400 hover:bg-white/[0.04] transition-all duration-200">
-						<Plus className="h-4 w-4" />
-					</button>
-
-					<div className="flex-1" />
-
-					{/* Indicador de modo workspace */}
-					{workspaceMode !== "normal" && (
-						<button
-							onClick={() => setWorkspaceMode("normal")}
-							className="flex items-center gap-1 px-2 py-1 mb-0.5 rounded-md text-[10px] font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-all">
-							✕ {workspaceMode === "split" ? "Split" : "Panel"}
-						</button>
-					)}
-				</div>
-
 				{/* Navigation + Address bar */}
-				<div className="flex items-center gap-3 px-3 py-2.5 bg-[#0d1117]">
+				<div className="flex items-center gap-3 px-3 py-2.5 bg-browser-chrome border-t border-border">
 					<NavigationControls
 						canGoBack={false}
 						canGoForward={false}
@@ -821,8 +822,8 @@ export const BrowserWindow = () => {
 							onClick={() => setIsMenuOpen(!isMenuOpen)}
 							className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all duration-200 border ${
 								isMenuOpen
-									? "bg-cyan-500/15 text-cyan-400 border-cyan-500/20"
-									: "text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] border-transparent hover:border-white/[0.06]"
+									? "bg-primary/15 text-primary border-primary/20"
+									: "text-muted-foreground hover:text-foreground hover:bg-hoverBg border-transparent hover:border-border"
 							}`}
 							title="Menú de Orion">
 							<Menu className="h-4 w-4" />
@@ -832,7 +833,7 @@ export const BrowserWindow = () => {
 			</div>
 
 			{/* ═══ Content ═══ */}
-			<div className="flex-1 overflow-hidden relative bg-[#0a0e1a]">
+			<div className="flex-1 overflow-hidden relative bg-background">
 				<div
 					className={`w-full h-full flex ${
 						workspaceMode === "split"
@@ -886,6 +887,9 @@ export const BrowserWindow = () => {
 												onUrlChange={(newUrl) =>
 													handleTabUrlChange(tab.id, newUrl)
 												}
+												onNewWindow={(newUrl) =>
+													handleNavigate(newUrl)
+												}
 												className="w-full h-full"
 											/>
 										</div>
@@ -924,8 +928,8 @@ export const BrowserWindow = () => {
 							<div
 								className={`flex-shrink-0 ${
 									workspaceMode === "split"
-										? "w-[3px] bg-cyan-500/20 hover:bg-cyan-500/40 cursor-col-resize"
-										: "w-[1px] bg-white/[0.08]"
+										? "w-[3px] bg-primary/20 hover:bg-primary/40 cursor-col-resize"
+										: "w-[1px] bg-border"
 								}`}
 							/>
 							<div
@@ -934,7 +938,7 @@ export const BrowserWindow = () => {
 										? "w-1/2"
 										: "w-[320px] flex-shrink-0"
 								}`}>
-								<div className="flex items-center gap-2 px-2 py-1.5 bg-[#0d1117] border-b border-white/[0.06]">
+								<div className="flex items-center gap-2 px-2 py-1.5 bg-browser-chrome border-b border-border">
 									<input
 										type="text"
 										defaultValue={secondaryUrl}
@@ -953,7 +957,7 @@ export const BrowserWindow = () => {
 												setSecondaryUrl(normalized);
 											}
 										}}
-										className="flex-1 text-xs bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1 text-slate-300 placeholder-slate-600 outline-none focus:border-cyan-500/30"
+										className="flex-1 text-xs bg-hoverBg border border-border rounded-md px-2 py-1 text-foreground placeholder-muted-foreground outline-none focus:border-primary/30"
 										placeholder="URL del panel..."
 									/>
 									<button

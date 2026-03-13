@@ -32,6 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorite";
 import { useToast } from "@/hooks/use-toast";
+import { useSearchEngine } from "@/hooks/useSearchEngine";
 
 /* ═══════════════════════════════════════════
    TYPES
@@ -194,11 +195,18 @@ export const AddressBar = ({
 	const [timerElapsed, setTimerElapsed] = useState(0);
 	const [readerMode, setReaderMode] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
+	const [selectedIndex, setSelectedIndex] = useState(-1);
+	const [remoteSuggestions, setRemoteSuggestions] = useState<SuggestionItem[]>([]);
+	const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+	const [showEngineMenu, setShowEngineMenu] = useState(false);
+
+	const { config: engineConfig, changeEngine, engines } = useSearchEngine();
 
 	const inputRef = useRef<HTMLInputElement>(null);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 	const barRef = useRef<HTMLFormElement>(null);
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const { addFavorite, removeFavorite, isFavorite, favorites } = useFavorites();
 	const { toast } = useToast();
@@ -263,6 +271,44 @@ export const AddressBar = ({
 		return () => document.removeEventListener("mousedown", handleClick);
 	}, []);
 
+	// ── Fetch remote suggestions ──
+	const fetchSuggestions = useCallback(async (query: string) => {
+		if (!query.trim()) {
+			setRemoteSuggestions([]);
+			return;
+		}
+		setIsFetchingSuggestions(true);
+		try {
+			let raw: string[] = [];
+
+			// En Electron usamos IPC (sin CORS); en web usamos el backend proxy
+			if (window.electron?.fetchSuggestions) {
+				raw = await window.electron.fetchSuggestions(query.trim(), engineConfig.id);
+			} else {
+				const res = await fetch(
+					`/api/suggestions?q=${encodeURIComponent(query.trim())}`,
+				);
+				const data = await res.json();
+				raw = data.suggestions ?? [];
+			}
+
+			const suggestions: SuggestionItem[] = raw
+				.filter((s: string) => s.toLowerCase() !== query.toLowerCase())
+				.slice(0, 6)
+				.map((s: string) => ({
+					type: "suggestion" as const,
+					title: s,
+					url: engineConfig.searchUrl(s),
+					description: engineConfig.name,
+				}));
+			setRemoteSuggestions(suggestions);
+		} catch {
+			setRemoteSuggestions([]);
+		} finally {
+			setIsFetchingSuggestions(false);
+		}
+	}, [engineConfig]);
+
 	// ── Suggestions filtering ──
 	const filteredSuggestions = useCallback((): SuggestionItem[] => {
 		const q = filterQuery.toLowerCase();
@@ -270,7 +316,18 @@ export const AddressBar = ({
 
 		const results: SuggestionItem[] = [];
 
-		// Search bookmarks
+		// First: exact search entry
+		results.push({
+			type: "suggestion",
+			title: `Buscar "${filterQuery}"`,
+			url: engineConfig.searchUrl(filterQuery),
+			description: engineConfig.name,
+		});
+
+		// Remote API suggestions
+		results.push(...remoteSuggestions);
+
+		// Bookmarks matching query
 		favorites.forEach((f) => {
 			if (
 				f.title.toLowerCase().includes(q) ||
@@ -285,21 +342,13 @@ export const AddressBar = ({
 			}
 		});
 
-		// Add search suggestion
-		results.push({
-			type: "suggestion",
-			title: `Buscar "${filterQuery}"`,
-			url: `https://www.google.com/search?q=${encodeURIComponent(filterQuery)}`,
-			description: "Google Search",
-		});
-
 		// Add matching trending
 		MOCK_SUGGESTIONS.forEach((s) => {
 			if (s.title.toLowerCase().includes(q)) results.push(s);
 		});
 
 		return results;
-	}, [filterQuery, favorites]);
+	}, [filterQuery, favorites, remoteSuggestions, engineConfig]);
 
 	// ── Handlers ──
 	const handleSubmit = (e: React.FormEvent) => {
@@ -318,6 +367,7 @@ export const AddressBar = ({
 		setIsFocused(true);
 		setShowDropdown(true);
 		setFilterQuery("");
+		setSelectedIndex(-1);
 		// Select all text on focus
 		setTimeout(() => inputRef.current?.select(), 0);
 	};
@@ -330,9 +380,52 @@ export const AddressBar = ({
 	};
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		setInputValue(e.target.value);
-		setFilterQuery(e.target.value);
+		const val = e.target.value;
+		setInputValue(val);
+		setFilterQuery(val);
 		setShowDropdown(true);
+		setSelectedIndex(-1);
+
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => fetchSuggestions(val), 220);
+	};
+
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+		if (!showDropdown) return;
+		const suggestions = filteredSuggestions();
+
+		if (e.key === "ArrowDown") {
+			e.preventDefault();
+			setSelectedIndex((prev) => {
+				const next = Math.min(prev + 1, suggestions.length - 1);
+				const item = suggestions[next];
+				if (item?.url) setInputValue(item.url);
+				else if (item) setInputValue(item.title);
+				return next;
+			});
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault();
+			setSelectedIndex((prev) => {
+				const next = prev - 1;
+				if (next < 0) {
+					setInputValue(filterQuery);
+					return -1;
+				}
+				const item = suggestions[next];
+				if (item?.url) setInputValue(item.url);
+				else if (item) setInputValue(item.title);
+				return next;
+			});
+		} else if (e.key === "Escape") {
+			setShowDropdown(false);
+			setSelectedIndex(-1);
+			setInputValue(filterQuery);
+			inputRef.current?.blur();
+		} else if (e.key === "Enter" && selectedIndex >= 0) {
+			e.preventDefault();
+			const item = suggestions[selectedIndex];
+			if (item) handleSuggestionClick(item);
+		}
 	};
 
 	const handleCopyUrl = async () => {
@@ -433,6 +526,22 @@ export const AddressBar = ({
 		return "bg-white/[0.03]";
 	};
 
+	// ── Highlight matching text in suggestions ──
+	const highlightMatch = (text: string, query: string) => {
+		if (!query.trim()) return <span>{text}</span>;
+		const idx = text.toLowerCase().indexOf(query.toLowerCase());
+		if (idx === -1) return <span>{text}</span>;
+		return (
+			<>
+				<span>{text.slice(0, idx)}</span>
+				<span className="text-white font-semibold">
+					{text.slice(idx, idx + query.length)}
+				</span>
+				<span>{text.slice(idx + query.length)}</span>
+			</>
+		);
+	};
+
 	const SecurityIcon =
 		securityInfo.level === "secure"
 			? ShieldCheck
@@ -501,7 +610,7 @@ export const AddressBar = ({
 				{/* ═══ Main Bar ═══ */}
 				<div
 					className={`
-            flex-1 flex items-center gap-0 rounded-2xl border transition-all duration-300 relative overflow-hidden
+            flex-1 flex items-center gap-0 rounded-2xl border transition-all duration-300 relative
             ${getBarBorder()} ${getBarBg()}
           `}>
 					{/* Loading progress bar */}
@@ -557,7 +666,47 @@ export const AddressBar = ({
 					{/* ── Separator ── */}
 					<div className="w-px h-5 bg-white/[0.06] flex-shrink-0" />
 
-					{/* ── Input ── */}
+					{/* ── Engine selector pill ── */}
+					{isFocused && (
+						<div className="relative flex-shrink-0">
+							<button
+								type="button"
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => setShowEngineMenu((v) => !v)}
+								className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-bold transition-all duration-150 ${engineConfig.bgColor} ${engineConfig.color}`}>
+								<span>{engineConfig.letter}</span>
+								<ChevronDown className="w-2.5 h-2.5 opacity-60" />
+							</button>
+
+							{showEngineMenu && (
+								<div className="absolute top-full left-0 mt-1.5 z-[9999] w-44 rounded-xl bg-[#0d1117] border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden py-1">
+									{engines.map((eng) => (
+										<button
+											key={eng.id}
+											type="button"
+											onMouseDown={(e) => e.preventDefault()}
+											onClick={() => {
+												changeEngine(eng.id);
+												setShowEngineMenu(false);
+											}}
+											className={`flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors hover:bg-white/[0.05] ${
+												eng.id === engineConfig.id ? "bg-white/[0.04]" : ""
+											}`}>
+											<span className={`text-xs font-bold w-5 text-center ${eng.color}`}>
+												{eng.letter}
+											</span>
+											<span className="text-xs text-slate-300">{eng.name}</span>
+											{eng.id === engineConfig.id && (
+												<Check className="w-3 h-3 text-emerald-400 ml-auto" />
+											)}
+										</button>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+
+				{/* ── Input ── */}
 					<input
 						ref={inputRef}
 						type="text"
@@ -565,11 +714,12 @@ export const AddressBar = ({
 						onChange={handleInputChange}
 						onFocus={handleFocus}
 						onBlur={handleBlur}
+						onKeyDown={handleKeyDown}
 						className="flex-1 px-3 py-3.5 bg-transparent text-sm text-slate-200 placeholder-slate-600 focus:outline-none min-w-0"
 						placeholder={
 							privacyMode
 								? "Navegación privada — Buscar o escribir URL…"
-								: "Buscar con Orion o ingresar URL…"
+								: `Buscar en ${engineConfig.name} o escribir URL…`
 						}
 					/>
 
@@ -836,63 +986,71 @@ export const AddressBar = ({
 
 						{/* Results / Suggestions */}
 						<div className="p-2">
-							{filterQuery && (
-								<p className="text-[10px] uppercase tracking-wider text-slate-600 font-bold px-3 py-1.5">
-									Resultados
+							<div className="flex items-center justify-between px-3 py-1.5">
+								<p className="text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+									{filterQuery ? "Resultados" : "Tendencias"}
 								</p>
-							)}
-							{!filterQuery && (
-								<p className="text-[10px] uppercase tracking-wider text-slate-600 font-bold px-3 py-1.5">
-									Tendencias
-								</p>
-							)}
+								{isFetchingSuggestions && (
+									<Loader2 className="w-3 h-3 text-slate-600 animate-spin" />
+								)}
+							</div>
 
-							{filteredSuggestions().map((item, i) => (
-								<button
-									key={i}
-									onMouseDown={(e) => e.preventDefault()}
-									onClick={() => handleSuggestionClick(item)}
-									className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-all duration-150 text-left group">
-									{/* Icon */}
-									<div
-										className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
-											item.type === "bookmark"
-												? "bg-cyan-500/10 border-cyan-500/15"
-												: item.type === "trending"
-												? "bg-rose-500/10 border-rose-500/15"
-												: item.type === "suggestion"
-												? "bg-indigo-500/10 border-indigo-500/15"
-												: "bg-white/[0.04] border-white/[0.06]"
+							{filteredSuggestions().map((item, i) => {
+								const isSelected = i === selectedIndex;
+								return (
+									<button
+										key={i}
+										onMouseDown={(e) => e.preventDefault()}
+										onClick={() => handleSuggestionClick(item)}
+										onMouseEnter={() => setSelectedIndex(i)}
+										className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-150 text-left group ${
+											isSelected
+												? "bg-white/[0.07] border border-white/[0.06]"
+												: "hover:bg-white/[0.04] border border-transparent"
 										}`}>
-										{item.type === "bookmark" ? (
-											<Bookmark className="w-3.5 h-3.5 text-cyan-400" />
-										) : item.type === "trending" ? (
-											<TrendingUp className="w-3.5 h-3.5 text-rose-400" />
-										) : item.type === "suggestion" ? (
-											<Search className="w-3.5 h-3.5 text-indigo-400" />
-										) : item.type === "history" ? (
-											<Clock className="w-3.5 h-3.5 text-slate-400" />
-										) : (
-											<Zap className="w-3.5 h-3.5 text-amber-400" />
-										)}
-									</div>
+										{/* Icon */}
+										<div
+											className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${
+												item.type === "bookmark"
+													? "bg-cyan-500/10 border-cyan-500/15"
+													: item.type === "trending"
+													? "bg-rose-500/10 border-rose-500/15"
+													: item.type === "suggestion"
+													? "bg-indigo-500/10 border-indigo-500/15"
+													: "bg-white/[0.04] border-white/[0.06]"
+											}`}>
+											{item.type === "bookmark" ? (
+												<Bookmark className="w-3.5 h-3.5 text-cyan-400" />
+											) : item.type === "trending" ? (
+												<TrendingUp className="w-3.5 h-3.5 text-rose-400" />
+											) : item.type === "suggestion" ? (
+												<Search className="w-3.5 h-3.5 text-indigo-400" />
+											) : item.type === "history" ? (
+												<Clock className="w-3.5 h-3.5 text-slate-400" />
+											) : (
+												<Zap className="w-3.5 h-3.5 text-amber-400" />
+											)}
+										</div>
 
-									{/* Text */}
-									<div className="flex-1 min-w-0">
-										<p className="text-sm text-slate-300 group-hover:text-white truncate transition-colors">
-											{item.title}
-										</p>
-										{item.description && (
-											<p className="text-[11px] text-slate-600 truncate">
-												{item.description}
+										{/* Text */}
+										<div className="flex-1 min-w-0">
+											<p className={`text-sm truncate transition-colors ${isSelected ? "text-white" : "text-slate-300 group-hover:text-white"}`}>
+												{filterQuery
+													? highlightMatch(item.title, filterQuery)
+													: item.title}
 											</p>
-										)}
-									</div>
+											{item.description && (
+												<p className="text-[11px] text-slate-600 truncate">
+													{item.description}
+												</p>
+											)}
+										</div>
 
-									{/* Arrow */}
-									<ArrowRight className="w-3.5 h-3.5 text-slate-700 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0" />
-								</button>
-							))}
+										{/* Arrow */}
+										<ArrowRight className={`w-3.5 h-3.5 transition-all duration-150 flex-shrink-0 ${isSelected ? "text-slate-400 translate-x-0.5" : "text-slate-700 group-hover:text-slate-400"}`} />
+									</button>
+								);
+							})}
 						</div>
 
 						{/* Footer tip */}

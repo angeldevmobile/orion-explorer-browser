@@ -272,19 +272,19 @@ export const NewTabPage = ({
     if (voiceState === "processing") return "border-violet-500/60 shadow-[0_0_30px_-5px_rgba(139,92,246,0.3)]";
     if (voiceState === "results") return "border-emerald-500/60 shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]";
     if (searchFocused) return "border-cyan-500/30";
-    return "border-white/[0.08]";
+    return "border-[var(--orion-border)]";
   };
 
   const getSearchBgStyle = () => {
     if (voiceState === "listening") return "bg-cyan-500/[0.04]";
     if (voiceState === "processing") return "bg-violet-500/[0.04]";
     if (voiceState === "results") return "bg-emerald-500/[0.04]";
-    if (searchFocused) return "bg-white/[0.06]";
-    return "bg-white/[0.04]";
+    if (searchFocused) return "bg-[var(--orion-bgTertiary)]";
+    return "bg-[var(--orion-bgSecondary)]";
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#080c14] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+    <div className="h-full overflow-y-auto bg-[var(--orion-bgPrimary)] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
       {/* ═══ Ambient Background ═══ */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div
@@ -306,19 +306,19 @@ export const NewTabPage = ({
         <div className="max-w-3xl mx-auto text-center mb-10">
           {/* Date & Time (compact top line) */}
           <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-sm text-slate-600">{dateTime.date}</span>
-            <span className="text-slate-700">•</span>
-            <span className="text-sm font-semibold text-slate-400">
+            <span className="text-sm text-[var(--orion-textMuted)]">{dateTime.date}</span>
+            <span className="text-[var(--orion-textMuted)]">•</span>
+            <span className="text-sm font-semibold text-[var(--orion-textSecondary)]">
               {dateTime.time}
             </span>
           </div>
 
           {/* Greeting */}
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 tracking-tight">
+          <h1 className="text-3xl md:text-4xl font-bold text-[var(--orion-textPrimary)] mb-2 tracking-tight">
             {greeting.text}{" "}
             <span className="inline-block">{greeting.emoji}</span>
           </h1>
-          <p className="text-base text-slate-500 mb-8">
+          <p className="text-base text-[var(--orion-textMuted)] mb-8">
             ¿Qué quieres{" "}
             <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent font-semibold">
               explorar
@@ -351,7 +351,7 @@ export const NewTabPage = ({
                   className={`h-5 w-5 transition-colors duration-300 ${
                     isVoiceActive || searchFocused
                       ? "text-cyan-400"
-                      : "text-slate-600"
+                      : "text-[var(--orion-textMuted)]"
                   }`}
                 />
               </div>
@@ -407,7 +407,7 @@ export const NewTabPage = ({
                     onChange={(e) => setSearchValue(e.target.value)}
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
-                    className="w-full px-4 py-4 bg-transparent text-slate-200 placeholder-slate-600 text-[15px] focus:outline-none"
+                    className="w-full px-4 py-4 bg-transparent text-[var(--orion-textSecondary)] placeholder-[var(--orion-textMuted)] text-[15px] focus:outline-none"
                   />
                 )}
               </div>
@@ -426,9 +426,7 @@ export const NewTabPage = ({
 
                 {/* Divider */}
                 <div
-                  className={`w-px h-7 transition-colors duration-300 ${
-                    isVoiceActive ? "bg-white/[0.1]" : "bg-white/[0.06]"
-                  }`}
+                  className={`w-px h-7 transition-colors duration-300 bg-[var(--orion-border)]`}
                 />
 
                 {/* Voice Button — embedded */}
@@ -442,7 +440,7 @@ export const NewTabPage = ({
                       ? "bg-gradient-to-br from-violet-500 to-purple-400 text-white shadow-lg shadow-violet-500/30 scale-105"
                       : voiceState === "results"
                       ? "bg-gradient-to-br from-emerald-500 to-green-400 text-white shadow-lg shadow-emerald-500/30 scale-105"
-                      : "text-slate-500 hover:text-cyan-400 hover:bg-white/[0.06] active:scale-95"
+                      : "text-[var(--orion-textMuted)] hover:text-cyan-400 hover:bg-[var(--orion-bgTertiary)] active:scale-95"
                   }`}
                 >
                   {/* Pulse ring when active */}
@@ -476,14 +474,14 @@ export const NewTabPage = ({
           {/* Voice suggestions chips */}
           {suggestions.length > 0 && voiceState === "results" && (
             <div className="mt-4 flex flex-wrap gap-2 justify-center animate-in">
-              <span className="text-xs text-slate-500 mr-1 self-center">
+              <span className="text-xs text-[var(--orion-textMuted)] mr-1 self-center">
                 Sugerencias:
               </span>
               {suggestions.map((s, i) => (
                 <button
                   key={i}
                   onClick={() => onNavigate(s)}
-                  className="px-3.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:border-cyan-500/30 hover:bg-cyan-500/[0.06] text-xs text-slate-400 hover:text-cyan-400 transition-all duration-200"
+                  className="px-3.5 py-1.5 rounded-lg bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] hover:border-cyan-500/30 hover:bg-cyan-500/[0.06] text-xs text-[var(--orion-textSecondary)] hover:text-cyan-400 transition-all duration-200"
                 >
                   {s}
                 </button>
@@ -494,14 +492,14 @@ export const NewTabPage = ({
           {/* Keyboard shortcut hint */}
           {!isVoiceActive && !searchValue && (
             <div className="mt-3 flex items-center justify-center gap-4">
-              <span className="flex items-center gap-1.5 text-[11px] text-slate-700">
-                <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-slate-500 font-mono text-[10px]">
+              <span className="flex items-center gap-1.5 text-[11px] text-[var(--orion-textMuted)]">
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] text-[var(--orion-textMuted)] font-mono text-[10px]">
                   /
                 </kbd>
                 para buscar
               </span>
-              <span className="flex items-center gap-1.5 text-[11px] text-slate-700">
-                <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-slate-500 font-mono text-[10px]">
+              <span className="flex items-center gap-1.5 text-[11px] text-[var(--orion-textMuted)]">
+                <kbd className="px-1.5 py-0.5 rounded bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] text-[var(--orion-textMuted)] font-mono text-[10px]">
                   Alt+V
                 </kbd>
                 para voz
@@ -524,14 +522,14 @@ export const NewTabPage = ({
                 <button
                   key={i}
                   onClick={() => onNavigate(`https://${item.url}`)}
-                  className="group flex flex-col items-center gap-2.5 py-4 px-2 rounded-2xl hover:bg-white/[0.04] transition-all duration-250"
+                  className="group flex flex-col items-center gap-2.5 py-4 px-2 rounded-2xl hover:bg-[var(--orion-bgSecondary)] transition-all duration-250"
                 >
                   <div
                     className={`w-12 h-12 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center shadow-lg ${style.glow} group-hover:scale-110 group-hover:shadow-xl transition-all duration-300`}
                   >
                     <item.icon className="h-5 w-5 text-white" />
                   </div>
-                  <span className="text-[11px] text-slate-500 group-hover:text-slate-300 transition-colors font-medium">
+                  <span className="text-[11px] text-[var(--orion-textMuted)] group-hover:text-[var(--orion-textSecondary)] transition-colors font-medium">
                     {item.title}
                   </span>
                 </button>
@@ -553,10 +551,10 @@ export const NewTabPage = ({
                 <button
                   key={i}
                   onClick={() => onNavigate(query)}
-                  className="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.06] hover:border-white/[0.12] transition-all duration-200"
+                  className="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] hover:bg-[var(--orion-bgTertiary)] hover:border-[var(--orion-borderHover)] transition-all duration-200"
                 >
-                  <Clock className="h-3.5 w-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
-                  <span className="text-sm text-slate-400 group-hover:text-slate-200 transition-colors truncate max-w-[200px]">
+                  <Clock className="h-3.5 w-3.5 text-[var(--orion-textMuted)] group-hover:text-[var(--orion-textSecondary)] transition-colors" />
+                  <span className="text-sm text-[var(--orion-textSecondary)] group-hover:text-[var(--orion-textPrimary)] transition-colors truncate max-w-[200px]">
                     {query
                       .replace("https://", "")
                       .replace("http://", "")
@@ -573,13 +571,13 @@ export const NewTabPage = ({
           {/* News column (2/3) */}
           <div className="lg:col-span-2">
             {/* Tab switcher */}
-            <div className="flex items-center gap-1 mb-5 p-1 bg-white/[0.03] rounded-xl border border-white/[0.06] w-fit">
+            <div className="flex items-center gap-1 mb-5 p-1 bg-[var(--orion-bgSecondary)] rounded-xl border border-[var(--orion-border)] w-fit">
               <button
                 onClick={() => setActiveNewsTab("news")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   activeNewsTab === "news"
                     ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/20"
-                    : "text-slate-500 hover:text-slate-300 border border-transparent"
+                    : "text-[var(--orion-textMuted)] hover:text-[var(--orion-textSecondary)] border border-transparent"
                 }`}
               >
                 <Newspaper className="w-3.5 h-3.5" />
@@ -590,7 +588,7 @@ export const NewTabPage = ({
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   activeNewsTab === "trends"
                     ? "bg-amber-500/15 text-amber-400 border border-amber-500/20"
-                    : "text-slate-500 hover:text-slate-300 border border-transparent"
+                    : "text-[var(--orion-textMuted)] hover:text-[var(--orion-textSecondary)] border border-transparent"
                 }`}
               >
                 <Flame className="w-3.5 h-3.5" />
@@ -680,8 +678,8 @@ function SectionHeader({
       >
         {icon}
       </div>
-      <h2 className="text-base font-bold text-slate-200">{title}</h2>
-      <div className="flex-1 h-px bg-gradient-to-r from-white/[0.06] to-transparent" />
+      <h2 className="text-base font-bold text-[var(--orion-textPrimary)]">{title}</h2>
+      <div className="flex-1 h-px bg-gradient-to-r from-[var(--orion-border)] to-transparent" />
     </div>
   );
 }
@@ -697,7 +695,7 @@ function FeaturedNewsCard({
   return (
     <button
       onClick={onClick}
-      className="group relative w-full text-left rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300"
+      className="group relative w-full text-left rounded-2xl overflow-hidden border border-[var(--orion-border)] hover:border-[var(--orion-borderHover)] transition-all duration-300"
     >
       {item.image && (
         <div className="relative h-48 overflow-hidden">
@@ -707,7 +705,7 @@ function FeaturedNewsCard({
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#080c14] via-[#080c14]/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--orion-bgPrimary)] via-[var(--orion-bgPrimary)]/50 to-transparent" />
           <div className="absolute top-3 left-3">
             <span
               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
@@ -721,20 +719,20 @@ function FeaturedNewsCard({
         </div>
       )}
 
-      <div className="p-5 bg-white/[0.02]">
-        <h3 className="text-lg font-bold text-slate-200 group-hover:text-white transition-colors leading-snug mb-3">
+      <div className="p-5 bg-[var(--orion-bgSecondary)]">
+        <h3 className="text-lg font-bold text-[var(--orion-textSecondary)] group-hover:text-[var(--orion-textPrimary)] transition-colors leading-snug mb-3">
           {item.title}
         </h3>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Globe className="w-3.5 h-3.5 text-slate-600" />
-            <span className="text-xs text-slate-500 font-medium">
+            <Globe className="w-3.5 h-3.5 text-[var(--orion-textMuted)]" />
+            <span className="text-xs text-[var(--orion-textMuted)] font-medium">
               {item.source}
             </span>
-            <span className="text-xs text-slate-700">•</span>
-            <span className="text-xs text-slate-600">{item.time}</span>
+            <span className="text-xs text-[var(--orion-textMuted)]">•</span>
+            <span className="text-xs text-[var(--orion-textMuted)]">{item.time}</span>
           </div>
-          <ExternalLink className="w-4 h-4 text-slate-700 group-hover:text-cyan-400 transition-colors" />
+          <ExternalLink className="w-4 h-4 text-[var(--orion-textMuted)] group-hover:text-cyan-400 transition-colors" />
         </div>
       </div>
     </button>
@@ -752,7 +750,7 @@ function NewsCard({
   return (
     <button
       onClick={onClick}
-      className="group flex gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-250 text-left w-full"
+      className="group flex gap-4 p-4 rounded-xl bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] hover:bg-[var(--orion-bgTertiary)] hover:border-[var(--orion-borderHover)] transition-all duration-250 text-left w-full"
     >
       {item.image ? (
         <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
@@ -764,8 +762,8 @@ function NewsCard({
           />
         </div>
       ) : (
-        <div className="w-20 h-20 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0">
-          <Newspaper className="w-6 h-6 text-slate-700" />
+        <div className="w-20 h-20 rounded-lg bg-[var(--orion-bgTertiary)] border border-[var(--orion-border)] flex items-center justify-center flex-shrink-0">
+          <Newspaper className="w-6 h-6 text-[var(--orion-textMuted)]" />
         </div>
       )}
 
@@ -778,13 +776,13 @@ function NewsCard({
         >
           {item.category}
         </span>
-        <h4 className="text-sm font-semibold text-slate-300 group-hover:text-white transition-colors leading-snug line-clamp-2">
+        <h4 className="text-sm font-semibold text-[var(--orion-textSecondary)] group-hover:text-[var(--orion-textPrimary)] transition-colors leading-snug line-clamp-2">
           {item.title}
         </h4>
         <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-[11px] text-slate-500">{item.source}</span>
-          <span className="text-[11px] text-slate-700">•</span>
-          <span className="text-[11px] text-slate-600">{item.time}</span>
+          <span className="text-[11px] text-[var(--orion-textMuted)]">{item.source}</span>
+          <span className="text-[11px] text-[var(--orion-textMuted)]">•</span>
+          <span className="text-[11px] text-[var(--orion-textMuted)]">{item.time}</span>
         </div>
       </div>
     </button>
@@ -806,20 +804,20 @@ function TrendCard({
   return (
     <button
       onClick={onClick}
-      className="group flex items-center gap-4 w-full p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.05] hover:border-amber-500/20 transition-all duration-200 text-left"
+      className="group flex items-center gap-4 w-full p-4 rounded-xl bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] hover:bg-[var(--orion-bgTertiary)] hover:border-amber-500/20 transition-all duration-200 text-left"
     >
       <div
         className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 ${
           isTop3
             ? "bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"
-            : "bg-white/[0.04] border border-white/[0.06] text-slate-500"
+            : "bg-[var(--orion-bgTertiary)] border border-[var(--orion-border)] text-[var(--orion-textMuted)]"
         }`}
       >
         {rank}
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate">
+        <p className="text-sm font-semibold text-[var(--orion-textSecondary)] group-hover:text-[var(--orion-textPrimary)] transition-colors truncate">
           {item.title}
         </p>
         <div className="flex items-center gap-1.5 mt-0.5">
@@ -830,7 +828,7 @@ function TrendCard({
         </div>
       </div>
 
-      <ArrowRight className="w-4 h-4 text-slate-700 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all duration-200 flex-shrink-0" />
+      <ArrowRight className="w-4 h-4 text-[var(--orion-textMuted)] group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all duration-200 flex-shrink-0" />
     </button>
   );
 }
@@ -847,30 +845,30 @@ function WeatherWidget() {
             <p className="text-[11px] text-sky-400/60 uppercase tracking-wider font-medium mb-1">
               Clima
             </p>
-            <p className="text-3xl font-bold text-white">22°</p>
+            <p className="text-3xl font-bold text-[var(--orion-textPrimary)]">22°</p>
           </div>
           <span className="text-4xl">⛅</span>
         </div>
 
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-[var(--orion-textSecondary)]">
             Parcialmente nublado
           </span>
         </div>
 
-        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/[0.06]">
+        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-[var(--orion-border)]">
           <div>
-            <p className="text-[10px] text-slate-600">Humedad</p>
-            <p className="text-xs text-slate-400 font-medium">65%</p>
+            <p className="text-[10px] text-[var(--orion-textMuted)]">Humedad</p>
+            <p className="text-xs text-[var(--orion-textSecondary)] font-medium">65%</p>
           </div>
           <div>
-            <p className="text-[10px] text-slate-600">Viento</p>
-            <p className="text-xs text-slate-400 font-medium">12 km/h</p>
+            <p className="text-[10px] text-[var(--orion-textMuted)]">Viento</p>
+            <p className="text-xs text-[var(--orion-textSecondary)] font-medium">12 km/h</p>
           </div>
           <div>
-            <p className="text-[10px] text-slate-600">UV</p>
-            <p className="text-xs text-slate-400 font-medium">Bajo</p>
+            <p className="text-[10px] text-[var(--orion-textMuted)]">UV</p>
+            <p className="text-xs text-[var(--orion-textSecondary)] font-medium">Bajo</p>
           </div>
         </div>
       </div>
@@ -889,16 +887,16 @@ function TipWidget() {
   const [tip] = useState(() => tips[Math.floor(Math.random() * tips.length)]);
 
   return (
-    <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-5">
+    <div className="rounded-2xl bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] p-5">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-7 h-7 rounded-lg bg-violet-500/15 border border-violet-500/20 flex items-center justify-center">
           <Sparkles className="w-3.5 h-3.5 text-violet-400" />
         </div>
-        <span className="text-xs font-bold text-slate-300">
+        <span className="text-xs font-bold text-[var(--orion-textSecondary)]">
           Consejo del día
         </span>
       </div>
-      <p className="text-sm text-slate-400 leading-relaxed">{tip}</p>
+      <p className="text-sm text-[var(--orion-textSecondary)] leading-relaxed">{tip}</p>
     </div>
   );
 }
@@ -906,12 +904,12 @@ function TipWidget() {
 /* ── Stats Widget ── */
 function StatsWidget() {
   return (
-    <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] p-5">
+    <div className="rounded-2xl bg-[var(--orion-bgSecondary)] border border-[var(--orion-border)] p-5">
       <div className="flex items-center gap-2 mb-4">
         <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center">
           <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
         </div>
-        <span className="text-xs font-bold text-slate-300">Tu actividad</span>
+        <span className="text-xs font-bold text-[var(--orion-textSecondary)]">Tu actividad</span>
       </div>
 
       <div className="space-y-3">
@@ -940,9 +938,9 @@ function StatRow({
 
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-xs text-[var(--orion-textMuted)]">{label}</span>
       <span
-        className={`text-sm font-bold ${colors[color] || "text-slate-300"}`}
+        className={`text-sm font-bold ${colors[color] || "text-[var(--orion-textSecondary)]"}`}
       >
         {value}
       </span>
