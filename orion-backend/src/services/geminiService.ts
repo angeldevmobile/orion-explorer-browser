@@ -198,6 +198,66 @@ export class GeminiService {
     return parsed;
   }
 
+  async analyzeImage(
+    imageBase64: string,
+    mimeType: string,
+    action: 'extract' | 'translate' | 'summarize' | 'analyze' | 'ask' | 'search',
+    extra?: { question?: string; targetLanguage?: string }
+  ) {
+    const visionModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const prompts: Record<string, string> = {
+      extract: `
+        Extrae todo el texto visible en esta imagen con precisión.
+        - Mantén la estructura original (saltos de línea, listas, tablas si aplica)
+        - No añadas explicaciones, solo el texto
+        RESPONDE EN JSON: { "text": "texto extraído", "confidence": "alta|media|baja", "language": "idioma detectado" }
+      `,
+      translate: `
+        Extrae el texto de esta imagen y tradúcelo al ${extra?.targetLanguage || 'español'}.
+        RESPONDE EN JSON: { "originalText": "texto original", "translatedText": "traducción", "detectedLanguage": "idioma original" }
+      `,
+      summarize: `
+        Extrae el texto de esta imagen y genera un resumen conciso.
+        RESPONDE EN JSON: { "text": "texto completo extraído", "summary": "resumen en 2-3 oraciones", "keyPoints": ["punto 1", "punto 2"] }
+      `,
+      analyze: `
+        Analiza esta imagen completamente como Orion Vision:
+        1. Extrae todo el texto visible
+        2. Resume el contenido
+        3. Detecta URLs o links si existen
+        4. Identifica el tipo de contenido (documento, infografía, captura, foto, etc.)
+        5. Sugiere acciones útiles
+        RESPONDE EN JSON: {
+          "text": "texto extraído completo",
+          "summary": "resumen",
+          "contentType": "tipo de contenido",
+          "detectedUrls": ["url1"],
+          "keyPoints": ["punto 1"],
+          "suggestions": ["acción sugerida 1", "acción sugerida 2"],
+          "language": "idioma detectado"
+        }
+      `,
+      ask: `
+        Analiza esta imagen y responde la siguiente pregunta: "${extra?.question || '¿Qué muestra esta imagen?'}"
+        También extrae cualquier texto visible relevante.
+        RESPONDE EN JSON: { "answer": "respuesta a la pregunta", "relevantText": "texto relevante extraído", "confidence": "alta|media|baja" }
+      `,
+      search: `
+        Extrae el texto principal de esta imagen que podría usarse como búsqueda web.
+        Optimiza el texto para búsqueda: limpia ruido, normaliza espacios.
+        RESPONDE EN JSON: { "searchQuery": "texto optimizado para búsqueda", "fullText": "texto completo extraído" }
+      `,
+    };
+
+    const result = await visionModel.generateContent([
+      { inlineData: { data: imageBase64, mimeType } },
+      prompts[action],
+    ]);
+
+    return parseGeminiJson(result.response.text());
+  }
+
   clearHistory() {
     this.conversationHistory = [];
   }

@@ -6,9 +6,10 @@ interface ToolsSectionProps {
   currentZoom: number;
   onZoomChange?: (zoom: number) => void;
   onClose: () => void;
+  onOpenOCR?: () => void;
 }
 
-export function ToolsSection({ currentZoom, onZoomChange, onClose }: ToolsSectionProps) {
+export function ToolsSection({ currentZoom, onZoomChange, onClose, onOpenOCR }: ToolsSectionProps) {
   const { toast } = useToast();
 
   const handleCapture = async () => {
@@ -61,7 +62,6 @@ export function ToolsSection({ currentZoom, onZoomChange, onClose }: ToolsSectio
   };
 
   const handleReaderMode = () => {
-    // Inyecta un estilo de lectura limpia en la página
     const style = document.createElement("style");
     style.id = "orion-reader-mode";
     style.textContent = `
@@ -89,7 +89,7 @@ export function ToolsSection({ currentZoom, onZoomChange, onClose }: ToolsSectio
         <ToolCard icon={<Sparkles className="w-5 h-5 text-violet-400" />} title="Modo lectura" desc="Leer sin distracciones" accent="violet" onClick={handleReaderMode} />
         <ToolCard icon={<Palette className="w-5 h-5 text-rose-400" />} title="Color Picker" desc="Extraer colores de la página" accent="rose" onClick={handleColorPicker} />
         <ToolCard icon={<Ruler className="w-5 h-5 text-amber-400" />} title="Medidor de página" desc="Medir distancias en la web" accent="amber" onClick={() => { toast({ title: "Modo medición activado" }); onClose(); }} />
-        <ToolCard icon={<ScanLine className="w-5 h-5 text-emerald-400" />} title="Texto de imagen (OCR)" desc="Extraer texto de imágenes" accent="emerald" onClick={() => { toast({ title: "OCR activado", description: "Selecciona una imagen" }); onClose(); }} />
+        <ToolCard icon={<ScanLine className="w-5 h-5 text-emerald-400" />} title="Texto de imagen (OCR)" desc="Extraer texto de imágenes con IA" accent="emerald" onClick={onOpenOCR} />
         <ToolCard icon={<FileText className="w-5 h-5 text-cyan-400" />} title="Guardar como PDF" desc="Exportar página a PDF" accent="cyan" onClick={handlePdf} />
         <ToolCard icon={<PenTool className="w-5 h-5 text-orange-400" />} title="Anotar en página" desc="Dibujar y subrayar contenido" accent="orange" onClick={() => { toast({ title: "Modo anotación activado" }); onClose(); }} />
         <ToolCard icon={<Globe className="w-5 h-5 text-indigo-400" />} title="Traducir página" desc="Traducción automática completa" accent="indigo" onClick={() => { toast({ title: "Traduciendo página…" }); onClose(); }} />

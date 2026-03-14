@@ -25,6 +25,7 @@ import tabGroupRoutes from "./routes/tabGroupRoutes";
 import mediaRoutes from "./routes/mediaRoutes";
 import suggestionsRoutes from "./routes/suggestionsRoutes";
 import aiHistoryRoutes from "./routes/aiHistoryRoutes";
+import visionRoutes from "./routes/visionRoutes";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,6 +57,7 @@ app.use("/api/tab-groups", tabGroupRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/suggestions", suggestionsRoutes);
 app.use("/api/ai-history", aiHistoryRoutes);
+app.use("/api/vision", visionRoutes);
 // Health Check
 app.get("/api/health", async (_req, res) => {
   try {

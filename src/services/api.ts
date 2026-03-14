@@ -409,6 +409,23 @@ export const statsService = {
   },
 };
 
+// ── Vision / OCR ──
+export interface VisionAnalyzeParams {
+  imageBase64?: string;
+  imageUrl?: string;
+  mimeType?: string;
+  action: 'extract' | 'translate' | 'summarize' | 'analyze' | 'ask' | 'search';
+  question?: string;
+  targetLanguage?: string;
+}
+
+export const visionService = {
+  analyze: async (params: VisionAnalyzeParams) => {
+    const response = await api.post('/vision/analyze', params);
+    return response.data;
+  },
+};
+
 // ── User Preferences ──
 export const preferencesService = {
   get: async () => {

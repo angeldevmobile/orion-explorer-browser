@@ -24,6 +24,7 @@ import { useMenuData } from "@/hooks/useMenuData";
 
 import { QuickActionBtn } from "./sections/ShareSectionUtils";
 import { ToolsSection } from "./sections/ToolSection";
+import { OCRModal } from "./sections/OCRModal";
 import { PrivacySection } from "./sections/PrivacySection";
 import { WorkspaceSection } from "./sections/WorkspaceSection";
 import { FocusSection } from "./sections/FocusSection";
@@ -155,6 +156,7 @@ export const BrowserMenu = ({
 	const [focusElapsed, setFocusElapsed] = useState(0);
 	const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
 	const [searchMenu, setSearchMenu] = useState("");
+	const [showOCR, setShowOCR] = useState(false);
 
 	const menuRef = useRef<HTMLDivElement>(null);
 	const { toast } = useToast();
@@ -254,7 +256,7 @@ export const BrowserMenu = ({
 		}
 	}, [focusMode, focusElapsed, focusTimer, blockedSites, onFocusChange]);
 
-	if (!isOpen) return null;
+	if (!isOpen && !showOCR) return null;
 
 	const handleStartFocus = async (minutes: number) => {
 		try {
@@ -311,7 +313,8 @@ export const BrowserMenu = ({
 		: dynamicSections;
 
 	return (
-		<div className="fixed inset-0 z-50">
+		<>
+		{isOpen && <div className="fixed inset-0 z-50">
 			<div
 				className="absolute inset-0 bg-black/40 backdrop-blur-sm"
 				onClick={onClose}
@@ -460,6 +463,7 @@ export const BrowserMenu = ({
 							currentZoom={currentZoom}
 							onZoomChange={onZoomChange}
 							onClose={onClose}
+							onOpenOCR={() => { onClose(); setShowOCR(true); }}
 						/>
 					)}
 					{!loading && activeSection === "privacy" && (
@@ -551,6 +555,8 @@ export const BrowserMenu = ({
           animation: menu-in 0.2s ease-out forwards;
         }
       `}</style>
-		</div>
+		</div>}
+		<OCRModal open={showOCR} onClose={() => setShowOCR(false)} onSearch={onNavigate} />
+		</>
 	);
 };
