@@ -28,6 +28,7 @@ use tao::{
     window::{Icon, WindowBuilder},
 };
 use wry::{Rect, WebViewBuilder};
+use wry::http::{header::CONTENT_TYPE, Request as WryRequest, Response as WryResponse};
 use std::sync::Arc;
 use orion_engine::security::{SecurityLayer, UrlDecision};
 
@@ -100,6 +101,8 @@ enum UserEvent {
     },
     /// Silenciar / restaurar audio de la pestaña activa.
     SetMute(bool),
+    /// Notificar a React que un sitio solicitó un permiso.
+    PermissionRequested { origin: String, kind: String },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -159,6 +162,112 @@ fn spawn_backend() -> Option<std::process::Child> {
             None
         }
     }
+}
+
+// ── Páginas de error Flux ─────────────────────────────────────────────────────
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+     .replace('<', "&lt;")
+     .replace('>', "&gt;")
+     .replace('"', "&quot;")
+}
+
+/// Genera una página de error branded de Flux.
+/// kind: "blocked_tracker" | "blocked_security" | "offline" | "ssl" | "not_found"
+fn flux_error_page(kind: &str, url: &str) -> String {
+    let (icon, heading, desc, show_retry) = match kind {
+        "blocked_tracker" => (
+            r##"<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>"##,
+            "Tracker bloqueado",
+            "Flux bloqueó este sitio porque contiene rastreadores o publicidad intrusiva que violan tu privacidad.",
+            false,
+        ),
+        "blocked_security" => (
+            r##"<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>"##,
+            "Bloqueado por seguridad",
+            "Flux bloqueó esta página porque infringe la política de seguridad (contenido mixto o CSP).",
+            false,
+        ),
+        "offline" => (
+            r##"<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>"##,
+            "Sin conexión a internet",
+            "Comprueba tu conexión y vuelve a intentarlo.",
+            true,
+        ),
+        "not_found" => (
+            r##"<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>"##,
+            "Página no encontrada",
+            "La dirección no existe o ha sido movida.",
+            false,
+        ),
+        _ => (
+            r##"<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>"##,
+            "No se pudo cargar la página",
+            "Ocurrió un error inesperado al cargar esta dirección.",
+            true,
+        ),
+    };
+
+    let url_safe = html_escape(url);
+    let retry_btn = if show_retry {
+        r#"<button onclick="location.reload()">Reintentar</button>"#
+    } else {
+        ""
+    };
+
+    format!(r##"<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flux — {heading}</title>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box}}
+  body{{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:#0c0c10;color:#e2e8f0;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+  }}
+  .card{{text-align:center;max-width:460px;padding:48px 32px}}
+  .badge{{
+    display:inline-flex;align-items:center;gap:6px;
+    background:#18181f;color:#6366f1;
+    font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    padding:5px 12px;border-radius:20px;margin-bottom:32px;
+    border:1px solid #2d2d3d;
+  }}
+  .icon{{margin-bottom:24px}}
+  h1{{font-size:22px;font-weight:600;color:#f1f5f9;margin-bottom:10px}}
+  .desc{{font-size:14px;line-height:1.7;color:#64748b;margin-bottom:20px}}
+  .url{{
+    font-size:12px;color:#475569;word-break:break-all;
+    background:#18181f;padding:8px 14px;border-radius:8px;
+    border:1px solid #2d2d3d;margin-bottom:24px;
+  }}
+  button{{
+    background:#6366f1;color:#fff;border:none;
+    padding:10px 28px;border-radius:8px;font-size:14px;
+    font-weight:500;cursor:pointer;transition:background .15s;
+  }}
+  button:hover{{background:#4f46e5}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="badge">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="#6366f1"><circle cx="12" cy="12" r="12"/></svg>
+    Flux Browser
+  </div>
+  <div class="icon">{icon}</div>
+  <h1>{heading}</h1>
+  <p class="desc">{desc}</p>
+  <div class="url">{url_safe}</div>
+  {retry_btn}
+</div>
+</body>
+</html>"##)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -475,6 +584,65 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_millis(1500));
     }
 
+    // ── Permission store: (origin, kind) → allow/deny ────────────────────────
+    // Persiste durante la sesión. Primera petición siempre se deniega y se
+    // notifica a React para que el usuario decida.
+    let permissions: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<(String,String), bool>>>
+        = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+
+    // ── Script de detección offline (se inyecta en cada página cargada) ──────
+    let offline_html = flux_error_page("offline", "");
+    let offline_html_js = offline_html
+        .replace('\\', "\\\\")
+        .replace('`', "\\`")
+        .replace("${", "\\${");
+    let offline_init_script = format!(
+        r#"(function(){{
+          /* ── Offline detection ───────────────────── */
+          var _fp=`{offline_html_js}`;
+          window.addEventListener('offline',function(){{
+            document.open('text/html');document.write(_fp);document.close();
+          }});
+
+          /* ── Permission intercept ────────────────── */
+          var _origGUM = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+            ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+            : null;
+          var _origGeo = (navigator.geolocation)
+            ? navigator.geolocation.getCurrentPosition.bind(navigator.geolocation)
+            : null;
+
+          function _fluxCheckPerm(type) {{
+            var origin = encodeURIComponent(location.origin || 'unknown');
+            return fetch('fluxperm://localhost/check?type=' + type + '&origin=' + origin)
+              .then(function(r){{ return r.json(); }})
+              .then(function(j){{ return j; }})
+              .catch(function(){{ return {{ allowed: true, pending: false }}; }});
+          }}
+
+          if (_origGUM) {{
+            navigator.mediaDevices.getUserMedia = function(constraints) {{
+              var type = (constraints && constraints.video) ? 'camera' : 'microphone';
+              return _fluxCheckPerm(type).then(function(j) {{
+                if (j.allowed) return _origGUM(constraints);
+                if (j.pending) return Promise.reject(new DOMException(
+                  'Flux: acepta el permiso en la barra superior e inténtalo de nuevo.', 'NotAllowedError'));
+                return Promise.reject(new DOMException('Permission denied by Flux', 'NotAllowedError'));
+              }});
+            }};
+          }}
+
+          if (_origGeo) {{
+            navigator.geolocation.getCurrentPosition = function(success, error, opts) {{
+              _fluxCheckPerm('geolocation').then(function(j) {{
+                if (j.allowed) {{ _origGeo(success, error, opts); }}
+                else {{ if (error) error({{ code: 1, message: 'Permission denied by Flux' }}); }}
+              }});
+            }};
+          }}
+        }})();"#
+    );
+
     // ── 3. Event loop ──────────────────────────────────────────────────────
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy          = event_loop.create_proxy();
@@ -581,10 +749,56 @@ fn main() {
                 success,
             });
         })
+        .with_initialization_script(&offline_init_script)
+        .with_custom_protocol("fluxperm".into(), {
+            let permissions  = permissions.clone();
+            let proxy_perm   = proxy.clone();
+            move |_id, request: WryRequest<Vec<u8>>| {
+                let uri = request.uri().to_string();
+
+                // Parsear tipo y origen de la URL: fluxperm://localhost/check?type=camera&origin=...
+                let kind = uri.split("type=").nth(1)
+                    .and_then(|s| s.split('&').next())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let origin = uri.split("origin=").nth(1)
+                    .map(|s| s.split('&').next().unwrap_or(s))
+                    .unwrap_or("unknown")
+                    .to_string();
+                let key = (origin.clone(), kind.clone());
+
+                let (allowed, pending) = {
+                    let store = permissions.lock().unwrap();
+                    match store.get(&key) {
+                        Some(&a) => (a, false),
+                        None     => (false, true),
+                    }
+                };
+
+                if pending {
+                    println!("[flux-perms] {origin} solicitó '{kind}' → pendiente, notificando UI");
+                    let _ = proxy_perm.send_event(UserEvent::PermissionRequested {
+                        origin: origin.clone(),
+                        kind:   kind.clone(),
+                    });
+                } else {
+                    println!("[flux-perms] {origin} '{kind}' → {}", if allowed { "permitido" } else { "denegado" });
+                }
+
+                let body = serde_json::json!({ "allowed": allowed, "pending": pending }).to_string();
+                WryResponse::builder()
+                    .header(CONTENT_TYPE, "application/json")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(std::borrow::Cow::Owned(body.into_bytes()))
+                    .unwrap()
+            }
+        })
         .build_as_child(&window)
         .expect("No se pudo crear el WebView de contenido");
 
     // ── 4b. WebView del chrome — Z superior ───────────────────────────────
+    let permissions_ipc = permissions.clone();
+
     let chrome_view = WebViewBuilder::new()
         .with_url(UI_URL)
         .with_transparent(true)
@@ -665,6 +879,16 @@ fn main() {
                     Some("set_mute") => {
                         if let Some(muted) = val.get("muted").and_then(|m| m.as_bool()) {
                             let _ = proxy.send_event(UserEvent::SetMute(muted));
+                        }
+                    }
+                    // ── Decisión de permiso del usuario ───────────────────
+                    Some("permission_decision") => {
+                        let origin = val.get("origin").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let kind   = val.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let allow  = val.get("allow").and_then(|v| v.as_bool()).unwrap_or(false);
+                        if !origin.is_empty() && !kind.is_empty() {
+                            permissions_ipc.lock().unwrap().insert((origin.clone(), kind.clone()), allow);
+                            println!("[flux-perms] Decisión guardada — {origin} {kind}: {allow}");
                         }
                     }
                     Some(cmd) => println!("[orion-browser] Comando desconocido: {cmd}"),
@@ -807,6 +1031,29 @@ fn main() {
                 let _ = chrome_view.evaluate_script(
                     "window.dispatchEvent(new CustomEvent('orion:focusaddressbar'));"
                 );
+            }
+
+            // ── Permiso solicitado por un sitio ────────────────────────────
+            Event::UserEvent(UserEvent::PermissionRequested { origin, kind }) => {
+                let label = match kind.as_str() {
+                    "Camera"        => "la cámara",
+                    "Microphone"    => "el micrófono",
+                    "Geolocation"   => "tu ubicación",
+                    "Notifications" => "enviar notificaciones",
+                    "ClipboardRead" => "leer el portapapeles",
+                    _               => "un permiso del sistema",
+                };
+                let detail = serde_json::json!({
+                    "origin": origin,
+                    "kind":   kind,
+                    "label":  label,
+                });
+                let js = format!(
+                    "window.dispatchEvent(new CustomEvent('orion:permission:requested',{{detail:{}}}));",
+                    detail
+                );
+                let _ = chrome_view.evaluate_script(&js);
+                println!("[flux-perms] Evento enviado a React → {origin} quiere {label}");
             }
 
             // ── Silenciar pestaña ──────────────────────────────────────────
@@ -966,13 +1213,12 @@ fn main() {
                                 position: LogicalPosition::new(0.0, ch).into(),
                                 size: LogicalSize::new(w, (h - ch).max(0.0)).into(),
                             });
-                            let _ = content_view.load_html(&format!(
-                                "<html><body style='font-family:sans-serif;padding:2rem;\
-                                 background:#0f172a;color:#94a3b8'>\
-                                 <h1 style='color:#f87171'>Bloqueado por Orion Security</h1>\
-                                 <p>Esta URL ha sido bloqueada: <code>{url}</code></p>\
-                                 <p>Razón: <strong>{reason:?}</strong></p></body></html>"
-                            ));
+                            let kind = match reason {
+                                orion_engine::security::BlockReason::AdTracker    => "blocked_tracker",
+                                orion_engine::security::BlockReason::MixedContent => "blocked_security",
+                                orion_engine::security::BlockReason::CspViolation => "blocked_security",
+                            };
+                            let _ = content_view.load_html(&flux_error_page(kind, &url));
                             return;
                         }
                         UrlDecision::Upgrade(https_url) => {

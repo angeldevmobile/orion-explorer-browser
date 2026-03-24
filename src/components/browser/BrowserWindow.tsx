@@ -91,6 +91,9 @@ export const BrowserWindow = () => {
 	const handleReaderModeChange = (value: boolean) => {
 		setReaderMode(value);
 	};
+	// ── Permisos de sitio ─────────────────────────────────────────────────────
+	const [permRequest, setPermRequest] = useState<{ origin: string; kind: string; label: string } | null>(null);
+
 	const [focusActive, setFocusActive] = useState(false);
 	const [focusTimeRemaining, setFocusTimeRemaining] = useState("");
 	const [focusBlockedSites, setFocusBlockedSites] = useState<{ id: string; domain: string }[]>([]);
@@ -207,6 +210,28 @@ export const BrowserWindow = () => {
 		window.addEventListener("orion:urlchange", handler);
 		return () => window.removeEventListener("orion:urlchange", handler);
 	}, [handleNavigate]);
+
+	// ── Permiso solicitado por el contenido ──────────────────────────────────
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { origin, kind, label } = (e as CustomEvent).detail ?? {};
+			if (origin && kind) setPermRequest({ origin, kind, label });
+		};
+		window.addEventListener("orion:permission:requested", handler);
+		return () => window.removeEventListener("orion:permission:requested", handler);
+	}, []);
+
+	const handlePermDecision = (allow: boolean) => {
+		if (!permRequest) return;
+		const ipc = (window as unknown as { ipc?: { postMessage: (m: string) => void } }).ipc;
+		ipc?.postMessage(JSON.stringify({
+			cmd: "permission_decision",
+			origin: permRequest.origin,
+			kind: permRequest.kind,
+			allow,
+		}));
+		setPermRequest(null);
+	};
 
 	// ── Transparencia: el body del HTML debe ser transparente cuando el
 	// content_view nativo muestra una página, para que se vea a través
@@ -327,7 +352,27 @@ export const BrowserWindow = () => {
 					</div>
 				</div>
 
-				{/* Navigation + Address bar */}
+				{/* ── Barra de permiso de sitio ── */}
+			{permRequest && (
+				<div className="flex items-center gap-3 px-4 py-2 bg-amber-950/60 border-t border-amber-800/40 text-sm">
+					<span className="text-amber-300 flex-1">
+						<span className="font-semibold text-amber-200">{permRequest.origin}</span>
+						{" "}quiere acceder a <span className="font-semibold text-amber-200">{permRequest.label}</span>
+					</span>
+					<button
+						onClick={() => handlePermDecision(true)}
+						className="px-3 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-black text-xs font-semibold transition-colors">
+						Permitir
+					</button>
+					<button
+						onClick={() => handlePermDecision(false)}
+						className="px-3 py-1 rounded-md bg-transparent hover:bg-white/10 text-amber-300 text-xs font-semibold border border-amber-700 transition-colors">
+						Denegar
+					</button>
+				</div>
+			)}
+
+			{/* Navigation + Address bar */}
 				<div className="flex items-center gap-3 px-3 py-2.5 bg-browser-chrome border-t border-border">
 					<NavigationControls
 						canGoBack={navigation.canGoBack}
