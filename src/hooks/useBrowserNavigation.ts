@@ -10,6 +10,7 @@ interface UseBrowserNavigationParams {
 	activeTabId: string;
 	setTabs: React.Dispatch<React.SetStateAction<Tab[]>>;
 	setTabLoading: (tabId: string, loading: boolean) => void;
+	privacyMode: boolean;
 }
 
 export function useBrowserNavigation({
@@ -17,6 +18,7 @@ export function useBrowserNavigation({
 	activeTabId,
 	setTabs,
 	setTabLoading,
+	privacyMode,
 }: UseBrowserNavigationParams) {
 	const isAuthenticated = authService.isAuthenticated();
 	const { config: engineConfig } = useSearchEngine();
@@ -79,11 +81,14 @@ export function useBrowserNavigation({
 					t.id === activeTabId ? { ...t, url: normalizedUrl, title: pageTitle } : t,
 				),
 			);
-			saveRecentSearch(normalizedUrl);
+
+			// Modo privado: no guardar búsquedas recientes ni historial
+			if (!privacyMode) saveRecentSearch(normalizedUrl);
 			navigation.push(normalizedUrl, pageTitle);
 
 			if (
 				isAuthenticated &&
+				!privacyMode &&
 				!activeTabId.startsWith("temp-") &&
 				!activeTabId.startsWith("default")
 			) {
@@ -99,7 +104,7 @@ export function useBrowserNavigation({
 
 			toast({ title: "Navegando", description: `Cargando ${pageTitle}` });
 		},
-		[tabs, activeTabId, isAuthenticated, toast, normalizeUrl, navigation, setTabs, saveRecentSearch],
+		[tabs, activeTabId, isAuthenticated, privacyMode, toast, normalizeUrl, navigation, setTabs, saveRecentSearch],
 	);
 
 	// Navega en el historial (atrás/adelante) sin agregar una nueva entrada.

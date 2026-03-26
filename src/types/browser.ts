@@ -6,6 +6,7 @@ export interface Tab {
 	groupId?: string;
 	discarded?: boolean;   // true = WebView destruido para liberar RAM
 	lastActiveAt?: number; // timestamp de la última vez activa
+	private?: boolean;     // true = pestaña privada (WebView2 InPrivate, sin historial)
 }
 
 export type VoiceState = "idle" | "listening" | "processing" | "results";

@@ -1,9 +1,10 @@
 import jwt from "jsonwebtoken";
 import prisma from "../config/prisma";
-import { EncryptionService } from "./encrytionService";
+import { EncryptionService } from "./encryptionService";
+import { env } from "../config/env";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_EXPIRES_IN = "7d";
+const JWT_SECRET = env.JWT_SECRET;
+const JWT_EXPIRES_IN = env.JWT_EXPIRE;
 
 export interface RegisterData {
   email: string;
@@ -103,6 +104,7 @@ export class AuthService {
    * Generar JWT token
    */
   static generateToken(userId: string): string {
+    // @ts-expect-error — JWT_EXPIRES_IN es un valor ms válido ("7d", "1h"), pero @types/jsonwebtoken v9 usa StringValue
     return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   }
 

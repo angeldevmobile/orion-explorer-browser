@@ -1,21 +1,21 @@
 // ============================================================
-//  ORION RENDER — Fase 5+6: JS + Seguridad
+//  Flux RENDER — Fase 5+6: JS + Seguridad
 //
-//  Stack: winit 0.29 + softbuffer 0.4 + fontdue 0.8 + QuickJS
+//  Stack: winit 0.30 + softbuffer 0.4 + fontdue 0.8 + QuickJS
 //  Pipeline: HTML → CSS → JS → mutations → layout → paint
 //
 //  Uso:
 //    cargo run --bin orion-render
-//    ORION_FONT=/ruta/fuente.ttf cargo run --bin orion-render
+//    Flux_FONT=/ruta/fuente.ttf cargo run --bin orion-render
 // ============================================================
 
 use std::num::NonZeroU32;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::Window,
 };
 
 use orion_engine::{
@@ -44,7 +44,7 @@ const DEMO_HTML: &str = r#"<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>Orion Engine — Fase 5+6</h1>
+  <h1>Flux Engine — Fase 5+6</h1>
   <p class="muted">QuickJS + seguridad. Sin WebView2.</p>
 
   <div class="card">
@@ -69,11 +69,11 @@ const DEMO_HTML: &str = r#"<!DOCTYPE html>
     <p class="purple" style="font-size: 14px;">Inline style override en accion.</p>
   </div>
 
-  <p class="muted" id="footer">Orion Engine — motor propio sin dependencias externas.</p>
+  <p class="muted" id="footer">Flux Engine — motor propio sin dependencias externas.</p>
 
   <script>
     // Fase 5: JS modifica el DOM en tiempo de render
-    console.log('Orion JS runtime activo.');
+    console.log('Flux JS runtime activo.');
 
     var statusEl = document.getElementById('js-status');
     if (statusEl) {
@@ -98,55 +98,71 @@ const DEMO_HTML: &str = r#"<!DOCTYPE html>
     console.log('Cards encontrados: ' + cards.length);
 
     // document.title
-    document.title = 'Orion — Fase 5+6 activa';
+    document.title = 'Flux — Fase 5+6 activa';
     console.log('title cambiado a: ' + document.title);
   </script>
 </body>
 </html>"#;
 
+/// Estado de renderizado creado una vez dentro del event loop (winit 0.30 requiere
+/// que la ventana se cree desde ActiveEventLoop, no antes de run()).
+struct RenderState {
+    window:  Arc<Window>,
+    context: softbuffer::Context<Arc<Window>>,
+    surface: softbuffer::Surface<Arc<Window>, Arc<Window>>,
+}
+
 fn main() {
     // Fase 6: demo de seguridad en consola
     let security = SecurityLayer::new();
-    println!("[orion-security] Ad blocker: {}",
+    println!("[Flux-security] Ad blocker: {}",
         if is_blocked("https://doubleclick.net/ads") { "activo OK" } else { "fallo" });
-    println!("[orion-security] HSTS preload: {}",
+    println!("[Flux-security] HSTS preload: {}",
         if hsts_should_upgrade("github.com") { "activo OK" } else { "fallo" });
     drop(security);
 
     // 1. Pipeline HTML → JS → display list
     let commands = run_pipeline_with_url(DEMO_HTML, "about:blank");
-    println!("[orion-render] {} display commands", commands.len());
+    println!("[Flux-render] {} display commands", commands.len());
 
     // 2. Fuente del sistema
     let font_data = font::load_system_font();
     let fnt       = font::build_font(&font_data);
     let mut renderer = OrionSoftRenderer::new(fnt);
 
-    // 3. Ventana winit
+    // 3. Event loop — ventana y softbuffer se crean en Event::Resumed (winit 0.30)
     let event_loop = EventLoop::new().expect("EventLoop");
-    let window = Rc::new(
-        WindowBuilder::new()
-            .with_title("Orion Engine — Fase 5+6")
-            .with_inner_size(winit::dpi::LogicalSize::new(900u32, 720u32))
-            .with_resizable(true)
-            .build(&event_loop)
-            .expect("Window"),
-    );
+    let mut state: Option<RenderState> = None;
 
-    // 4. softbuffer context + surface
-    let context = softbuffer::Context::new(window.clone())
-        .expect("softbuffer Context");
-    let mut surface = softbuffer::Surface::new(&context, window.clone())
-        .expect("softbuffer Surface");
-
-    // 5. Event loop — winit 0.29 API: closure recibe (event, &EventLoopWindowTarget)
     event_loop.run(move |event, elwt| {
         elwt.set_control_flow(ControlFlow::Wait);
+
+        // Crear ventana + softbuffer la primera vez que el OS lo permite
+        if state.is_none() {
+            if matches!(event, Event::Resumed) {
+                let window = Arc::new(
+                    elwt.create_window(
+                        Window::default_attributes()
+                            .with_title("Flux Engine — Fase 5+6")
+                            .with_inner_size(winit::dpi::LogicalSize::new(900u32, 720u32))
+                            .with_resizable(true),
+                    ).expect("Window")
+                );
+                let context = softbuffer::Context::new(window.clone())
+                    .expect("softbuffer Context");
+                let surface = softbuffer::Surface::new(&context, window.clone())
+                    .expect("softbuffer Surface");
+                state = Some(RenderState { window, context, surface });
+            }
+            return;
+        }
+
+        let s = state.as_mut().unwrap();
 
         match event {
             // Cierre
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                println!("[orion-render] Cerrando.");
+                println!("[Flux-render] Cerrando.");
                 elwt.exit();
             }
 
@@ -162,28 +178,28 @@ fn main() {
 
             // Redimensionado → pedir redibujado
             Event::WindowEvent { event: WindowEvent::Resized(_), .. } => {
-                window.request_redraw();
+                s.window.request_redraw();
             }
 
             // Redibujado — aquí rasterizamos
             Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
-                let size = window.inner_size();
+                let size = s.window.inner_size();
                 let w = size.width;
                 let h = size.height;
                 if w == 0 || h == 0 { return; }
 
-                surface
+                s.surface
                     .resize(NonZeroU32::new(w).unwrap(), NonZeroU32::new(h).unwrap())
                     .expect("resize");
 
-                let mut buf = surface.buffer_mut().expect("buffer_mut");
+                let mut buf = s.surface.buffer_mut().expect("buffer_mut");
                 renderer.render(&commands, buf.as_mut(), w as usize, h as usize);
                 buf.present().expect("present");
             }
 
             // Listo para el siguiente frame — solicitar redibujado continuo
             Event::AboutToWait => {
-                window.request_redraw();
+                s.window.request_redraw();
             }
 
             _ => {}

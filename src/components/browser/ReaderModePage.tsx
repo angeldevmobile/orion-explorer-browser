@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Readability } from "@mozilla/readability";
 import { BookOpen, ExternalLink, X } from "lucide-react";
+import DOMPurify from "dompurify";
 
 interface ReaderModePageProps {
 	url: string;
@@ -121,7 +122,7 @@ export const ReaderModePage = ({ url, onExit }: ReaderModePageProps) => {
 						prose-a:text-orange-500 prose-a:no-underline hover:prose-a:underline
 						prose-img:rounded-xl prose-img:shadow-md
 						prose-blockquote:border-orange-400 prose-blockquote:text-slate-500"
-					dangerouslySetInnerHTML={{ __html: article.content }}
+					dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.content, { USE_PROFILES: { html: true } }) }}
 				/>
 			</div>
 		</div>

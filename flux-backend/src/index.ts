@@ -98,20 +98,20 @@ async function start() {
   await connectDatabase();
 
   app.listen(PORT, () => {
-    console.log(`Servidor Orion en http://localhost:${PORT}`);
-    console.log(`Health: http://localhost:${PORT}/api/health`);
-    console.log(`Entorno: ${process.env.NODE_ENV}`);
+    if (process.env.NODE_ENV !== "production") {
+      process.stdout.write(`[Flux] Servidor en http://localhost:${PORT}\n`);
+      process.stdout.write(`[Flux] Entorno: ${process.env.NODE_ENV}\n`);
+    }
   });
 }
 
 start().catch((err) => {
-  console.error("Error fatal:", err);
+  process.stderr.write(`[Flux] Error fatal: ${err}\n`);
   process.exit(1);
 });
 
 // Graceful Shutdown
 process.on("SIGINT", async () => {
   await prisma.$disconnect();
-  console.log("Servidor cerrado");
   process.exit(0);
 });

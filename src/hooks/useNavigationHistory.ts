@@ -1,7 +1,7 @@
 // src/hooks/useNavigationHistory.ts
 import { useState, useCallback } from 'react';
 
-interface HistoryEntry {
+export interface HistoryEntry {
   url: string;
   title?: string;
 }

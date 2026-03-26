@@ -51,7 +51,7 @@ export const BrowserWindow = () => {
 		navigation, handleNavigate, handleBack, handleForward,
 		handleRefresh, handleStop,
 		recentSearches,
-	} = useBrowserNavigation({ tabs, activeTabId, setTabs, setTabLoading });
+	} = useBrowserNavigation({ tabs, activeTabId, setTabs, setTabLoading, privacyMode });
 
 	const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -132,7 +132,7 @@ export const BrowserWindow = () => {
 					break;
 				case "t":
 					e.preventDefault();
-					handleNewTab();
+					handleNewTab(privacyMode);
 					break;
 				case "w":
 					e.preventDefault();
@@ -175,26 +175,68 @@ export const BrowserWindow = () => {
 		setNavError(null);
 	}, [activeTab?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	// ── IPC: sincronizar tab activo con el content_view nativo ─────────────
-	// Cuando el tab activo cambia de URL, avisamos al WebView nativo (wry).
-	// http(s)://  → content_view carga la página directamente (sin proxy).
-	// flux://    → content_view vuelve a about:blank (React renderiza la página).
-	const lastSentUrlRef = useRef<string>("");
+	// ── IPC: ciclo de vida de pestañas → Rust crea/destruye WebViews ───────
+	// native_id = "n-" + tab.id  (estable y derivable sin campo extra en Tab)
+	const nativeIdsRef = useRef<Map<string, string>>(new Map()); // tabId → nativeId
+
+	useEffect(() => {
+		const ipc = (window as unknown as { ipc?: { postMessage: (m: string) => void } }).ipc;
+		if (!ipc) return;
+
+		const currentIds = new Set(tabs.map((t) => t.id));
+
+		// Pestañas nuevas → Rust crea el WebView
+		for (const tab of tabs) {
+			if (!nativeIdsRef.current.has(tab.id)) {
+				const nativeId = `n-${tab.id}`;
+				nativeIdsRef.current.set(tab.id, nativeId);
+				ipc.postMessage(JSON.stringify({ cmd: "new_tab", native_id: nativeId, private: tab.private ?? false }));
+			}
+		}
+
+		// Pestañas cerradas → Rust destruye el WebView
+		for (const [tabId, nativeId] of nativeIdsRef.current.entries()) {
+			if (!currentIds.has(tabId)) {
+				nativeIdsRef.current.delete(tabId);
+				ipc.postMessage(JSON.stringify({ cmd: "close_tab", native_id: nativeId }));
+			}
+		}
+
+		// Pestañas descartadas (inactivas > 10 min) → navegar a about:blank libera
+		// la RAM del renderer (DOM, JS, imágenes). Al volver, Rust detecta que
+		// loaded_urls tiene "about:blank" ≠ URL real y recarga automáticamente.
+		for (const tab of tabs) {
+			if (tab.discarded && tab.id !== activeTabId) {
+				const nativeId = nativeIdsRef.current.get(tab.id) ?? `n-${tab.id}`;
+				ipc.postMessage(JSON.stringify({ cmd: "navigate", url: "about:blank", native_id: nativeId }));
+			}
+		}
+	}, [tabs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// ── IPC: sincronizar pestaña activa con el WebView nativo ───────────────
+	// Envía "navigate" con native_id; Rust muestra el WebView correcto y carga
+	// la URL solo si cambió (evitando recargar al cambiar de pestaña).
+	const lastSentUrlRef  = useRef<string>("");
+	const lastSentTabRef  = useRef<string>("");
 	useEffect(() => {
 		const ipc = (window as unknown as { ipc?: { postMessage: (m: string) => void } }).ipc;
 		if (!ipc || !activeTab) return;
 
+		const nativeId = nativeIdsRef.current.get(activeTabId) ?? `n-${activeTabId}`;
 		const url = activeTab.url;
 		const nativeUrl =
-			url.startsWith("http://") || url.startsWith("https://")
-				? url
-				: "about:blank";
+			url.startsWith("http://") || url.startsWith("https://") ? url : "about:blank";
 
-		// Evitar reenviar la misma URL repetidamente
-		if (nativeUrl === lastSentUrlRef.current) return;
-		lastSentUrlRef.current = nativeUrl;
+		const tabChanged = lastSentTabRef.current !== activeTabId;
+		const urlChanged = lastSentUrlRef.current !== nativeUrl;
 
-		ipc.postMessage(JSON.stringify({ cmd: "navigate", url: nativeUrl }));
+		// Siempre enviar si cambió la pestaña O si cambió la URL
+		if (!tabChanged && !urlChanged) return;
+
+		lastSentTabRef.current  = activeTabId;
+		lastSentUrlRef.current  = nativeUrl;
+
+		ipc.postMessage(JSON.stringify({ cmd: "navigate", url: nativeUrl, native_id: nativeId }));
 	}, [activeTabId, activeTab?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// ── IPC: actualizar la barra de direcciones cuando el usuario clica un
@@ -337,7 +379,7 @@ export const BrowserWindow = () => {
 							))}
 
 						<button
-							onClick={handleNewTab}
+							onClick={() => handleNewTab(privacyMode)}
 							className="flex-shrink-0 w-8 h-8 mb-0.5 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-hoverBg transition-all duration-200">
 							<Plus className="h-4 w-4" />
 						</button>
@@ -691,7 +733,7 @@ export const BrowserWindow = () => {
 					handleNavigate(url);
 					setIsMenuOpen(false);
 				}}
-				onNewTab={() => { handleNewTab(); setIsMenuOpen(false); }}
+				onNewTab={() => { handleNewTab(privacyMode); setIsMenuOpen(false); }}
 				currentUrl={activeTab?.url || ""}
 				currentTitle={activeTab?.title}
 				currentZoom={currentZoom}

@@ -10,7 +10,9 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error("Error:", err.message);
+  if (process.env.NODE_ENV === "development") {
+    process.stderr.write(`[Flux] Error: ${err.message}\n`);
+  }
 
   const status = err.status || 500;
   const message = err.message || "Error interno del servidor";

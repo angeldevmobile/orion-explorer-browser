@@ -1,6 +1,53 @@
 import { Router, Request, Response, raw } from "express";
+import { lookup } from "dns/promises";
 
 const router = Router();
+
+/**
+ * Verifica que el host no resuelva a una IP privada/interna (protección SSRF).
+ * Bloquea: loopback, RFC-1918, link-local, ::1, etc.
+ */
+async function isPrivateHost(host: string): Promise<boolean> {
+  // Bloquear literales de hostname internos antes de resolver DNS
+  const lower = host.toLowerCase().replace(/:\d+$/, "");
+  if (
+    lower === "localhost" ||
+    lower === "0.0.0.0" ||
+    lower.endsWith(".local") ||
+    lower.endsWith(".internal")
+  ) {
+    return true;
+  }
+
+  let address: string;
+  try {
+    const result = await lookup(lower, { hints: 0 });
+    address = result.address;
+  } catch {
+    // Si no resuelve el DNS, lo bloqueamos por precaución
+    return true;
+  }
+
+  // Rangos privados IPv4
+  const PRIVATE_RANGES = [
+    /^127\./,           // loopback
+    /^10\./,            // RFC-1918
+    /^172\.(1[6-9]|2\d|3[01])\./,  // RFC-1918
+    /^192\.168\./,      // RFC-1918
+    /^169\.254\./,      // link-local
+    /^0\./,             // "This" network
+    /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,  // Shared Address Space
+  ];
+
+  if (PRIVATE_RANGES.some((r) => r.test(address))) return true;
+
+  // IPv6 privadas/loopback
+  if (address === "::1" || address.startsWith("fc") || address.startsWith("fd")) {
+    return true;
+  }
+
+  return false;
+}
 
 // Leer el body como Buffer sin límite de tamaño ni parseo JSON
 // para poder reenviarlo tal cual al sitio externo
@@ -197,6 +244,11 @@ async function handleProxy(target: string, req: Request, res: Response): Promise
 
   if (!["http:", "https:"].includes(targetUrl.protocol)) {
     res.status(400).json({ error: "Protocolo no permitido" });
+    return;
+  }
+
+  if (await isPrivateHost(targetUrl.hostname)) {
+    res.status(403).json({ error: "Acceso a redes privadas no permitido" });
     return;
   }
 

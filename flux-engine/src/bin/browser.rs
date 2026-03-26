@@ -28,7 +28,6 @@ use tao::{
     window::{Icon, WindowBuilder},
 };
 use wry::{Rect, WebViewBuilder};
-use wry::http::{header::CONTENT_TYPE, Request as WryRequest, Response as WryResponse};
 use std::sync::Arc;
 use orion_engine::security::{SecurityLayer, UrlDecision};
 
@@ -60,12 +59,16 @@ enum UserEvent {
     WindowMaximize,
     WindowClose,
     WindowDrag,
+    /// Crea un nuevo WebView nativo para una nueva pestaña.
+    NewTab { native_id: String, incognito: bool },
+    /// Destruye el WebView de una pestaña cerrada.
+    CloseTab { native_id: String },
     /// Navegación desde la barra de direcciones o un link interno.
-    Navigate(String),
+    Navigate { native_id: String, url: String },
     /// Navegación directa sin seguridad extra: window.open() / target="_blank" / OAuth.
-    NavigateDirect(String),
-    /// Solo actualiza la barra de direcciones en React.
-    UpdateAddressBar(String),
+    NavigateDirect { native_id: String, url: String },
+    /// Actualiza la barra de direcciones en React y el estado de URL en Rust.
+    UpdateAddressBar { native_id: String, url: String },
     ChromeHeight(f64),
     /// Recargar la página actual.
     Reload,
@@ -552,6 +555,156 @@ fn run_ytdlp(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Crea un WebView de contenido para una pestaña específica.
+/// El WebView se crea oculto (bounds 0×0); el caller lo hace visible al activarlo.
+fn make_content_view(
+    native_id: String,
+    proxy: tao::event_loop::EventLoopProxy<UserEvent>,
+    permissions: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<(String, String), bool>>>,
+    offline_init_script: &str,
+    window: &tao::window::Window,
+    incognito: bool,
+) -> wry::WebView {
+    let proxy_nav  = proxy.clone();
+    let proxy_win  = proxy.clone();
+    let proxy_dl_s = proxy.clone();
+    let proxy_dl_d = proxy.clone();
+    let id_nav     = native_id.clone();
+    let id_win     = native_id.clone();
+    let id_dl_s    = native_id.clone();
+    let id_dl_d    = native_id.clone();
+
+    WebViewBuilder::new()
+        .with_url("about:blank")
+        .with_incognito(incognito)
+        .with_user_agent(USER_AGENT)
+        // Empieza oculto; Navigate lo hace visible cuando se activa
+        .with_bounds(Rect {
+            position: tao::dpi::LogicalPosition::new(0.0_f64, 0.0_f64).into(),
+            size:     tao::dpi::LogicalSize::new(0.0_f64, 0.0_f64).into(),
+        })
+        .with_devtools(cfg!(debug_assertions))
+        .with_navigation_handler(move |url: String| {
+            if url.starts_with("about:")
+                || url.starts_with("flux://")
+                || url.starts_with("data:")
+                || url.starts_with("blob:")
+                || url.starts_with("http://localhost:")
+            {
+                return true;
+            }
+
+            if url.starts_with("http://") || url.starts_with("https://") {
+                let security = SecurityLayer::new();
+                match security.check_url(&url) {
+                    UrlDecision::Block(reason) => {
+                        println!("[orion-security] Bloqueado ({reason:?}): {url}");
+                        return false;
+                    }
+                    UrlDecision::Upgrade(https_url) => {
+                        println!("[orion-security] HTTP→HTTPS upgrade → {https_url}");
+                        let _ = proxy_nav.send_event(UserEvent::Navigate {
+                            native_id: id_nav.clone(),
+                            url: https_url,
+                        });
+                        return false;
+                    }
+                    UrlDecision::Allow => {
+                        let _ = proxy_nav.send_event(UserEvent::UpdateAddressBar {
+                            native_id: id_nav.clone(),
+                            url,
+                        });
+                        return true;
+                    }
+                }
+            }
+            true
+        })
+        .with_new_window_req_handler(move |url: String| {
+            if url.starts_with("http://") || url.starts_with("https://") {
+                println!("[orion-browser] Nueva ventana interceptada → {url}");
+                let _ = proxy_win.send_event(UserEvent::NavigateDirect {
+                    native_id: id_win.clone(),
+                    url,
+                });
+            }
+            false
+        })
+        .with_download_started_handler(move |url: String, path: &mut std::path::PathBuf| -> bool {
+            let downloads_dir = std::env::var("USERPROFILE")
+                .map(|p| std::path::PathBuf::from(p).join("Downloads"))
+                .unwrap_or_else(|_| std::env::temp_dir());
+
+            let raw_name = url.split('/').last().unwrap_or("archivo");
+            let filename = raw_name.split('?').next().unwrap_or("archivo");
+            let filename = if filename.is_empty() { "descarga" } else { filename }.to_string();
+
+            *path = downloads_dir.join(&filename);
+            let path_str = path.display().to_string();
+            let id = url_to_id(&url);
+
+            println!("[orion-download] Iniciando (tab {}): {url} → {path_str}", id_dl_s);
+            let _ = proxy_dl_s.send_event(UserEvent::DownloadStarted { id, url, filename, path: path_str });
+            true
+        })
+        .with_download_completed_handler(move |url: String, path: Option<std::path::PathBuf>, success: bool| {
+            let path_str = path.map(|p| p.display().to_string()).unwrap_or_default();
+            let status = if success { "OK" } else { "Error" };
+            println!("[orion-download] {status} (tab {}): {url} → {path_str}", id_dl_d);
+            let id = url_to_id(&url);
+            let _ = proxy_dl_d.send_event(UserEvent::DownloadCompleted { id, url, path: path_str, success });
+        })
+        .with_initialization_script(offline_init_script)
+        .with_custom_protocol("fluxperm".into(), {
+            let permissions = permissions.clone();
+            let proxy_perm  = proxy.clone();
+            let id_perm     = native_id.clone();
+            move |_id, request: wry::http::Request<Vec<u8>>| {
+                let uri = request.uri().to_string();
+
+                let kind = uri.split("type=").nth(1)
+                    .and_then(|s| s.split('&').next())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let origin = uri.split("origin=").nth(1)
+                    .map(|s| s.split('&').next().unwrap_or(s))
+                    .unwrap_or("unknown")
+                    .to_string();
+                let key = (origin.clone(), kind.clone());
+
+                let (allowed, pending) = {
+                    let store = permissions.lock().unwrap();
+                    match store.get(&key) {
+                        Some(&a) => (a, false),
+                        None     => (false, true),
+                    }
+                };
+
+                if pending {
+                    println!("[flux-perms] tab={id_perm} {origin} solicitó '{kind}' → pendiente");
+                    let _ = proxy_perm.send_event(UserEvent::PermissionRequested {
+                        origin: origin.clone(),
+                        kind:   kind.clone(),
+                    });
+                } else {
+                    println!("[flux-perms] tab={id_perm} {origin} '{kind}' → {}",
+                        if allowed { "permitido" } else { "denegado" });
+                }
+
+                let body = serde_json::json!({ "allowed": allowed, "pending": pending }).to_string();
+                wry::http::Response::builder()
+                    .header(wry::http::header::CONTENT_TYPE, "application/json")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(std::borrow::Cow::Owned(body.into_bytes()))
+                    .unwrap()
+            }
+        })
+        .build_as_child(window)
+        .expect("No se pudo crear WebView de contenido")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn main() {
     // ── 1. Engine HTTP en hilo secundario ─────────────────────────────────
     let engine_handle = std::thread::spawn(|| {
@@ -647,12 +800,8 @@ fn main() {
 
     // ── 3. Event loop ──────────────────────────────────────────────────────
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
-    let proxy          = event_loop.create_proxy();
-    let proxy_nav      = proxy.clone();
-    let proxy_win      = proxy.clone();
-    let proxy_dl_start = proxy.clone();
-    let proxy_dl_done  = proxy.clone();
-    let proxy_kbd      = proxy.clone();
+    let proxy     = event_loop.create_proxy();
+    let proxy_kbd = proxy.clone(); // para ytdlp threads y make_content_view dinámico
 
     // ── 3. Ventana nativa ─────────────────────────────────────────────────
     let window = WindowBuilder::new()
@@ -670,133 +819,16 @@ fn main() {
     let init_w = phys.width  as f64 / scale;
     let init_h = phys.height as f64 / scale;
 
-    // ── 4a. WebView de contenido ───────────────────────────────────────────
-    let content_view = WebViewBuilder::new()
-        .with_url("about:blank")
-        .with_user_agent(USER_AGENT)
-        .with_bounds(Rect {
-            position: LogicalPosition::new(0.0, CHROME_HEIGHT).into(),
-            size: LogicalSize::new(init_w, init_h - CHROME_HEIGHT).into(),
-        })
-        .with_devtools(cfg!(debug_assertions))
-        .with_navigation_handler(move |url: String| {
-            if url.starts_with("about:")
-                || url.starts_with("flux://")
-                || url.starts_with("data:")
-                || url.starts_with("blob:")
-                || url.starts_with("http://localhost:")
-            {
-                return true;
-            }
-
-            if url.starts_with("http://") || url.starts_with("https://") {
-                let security = SecurityLayer::new();
-                match security.check_url(&url) {
-                    UrlDecision::Block(reason) => {
-                        println!("[orion-security] Bloqueado ({reason:?}): {url}");
-                        return false;
-                    }
-                    UrlDecision::Upgrade(https_url) => {
-                        println!("[orion-security] HTTP→HTTPS upgrade → {https_url}");
-                        let _ = proxy_nav.send_event(UserEvent::Navigate(https_url));
-                        return false;
-                    }
-                    UrlDecision::Allow => {
-                        let _ = proxy_nav.send_event(UserEvent::UpdateAddressBar(url));
-                        return true;
-                    }
-                }
-            }
-
-            true
-        })
-        .with_new_window_req_handler(move |url: String| {
-            if url.starts_with("http://") || url.starts_with("https://") {
-                println!("[orion-browser] Nueva ventana interceptada → {url}");
-                let _ = proxy_win.send_event(UserEvent::NavigateDirect(url));
-            }
-            false
-        })
-        .with_download_started_handler(move |url: String, path: &mut std::path::PathBuf| -> bool {
-            let downloads_dir = std::env::var("USERPROFILE")
-                .map(|p| std::path::PathBuf::from(p).join("Downloads"))
-                .unwrap_or_else(|_| std::env::temp_dir());
-
-            let raw_name = url.split('/').last().unwrap_or("archivo");
-            let filename = raw_name.split('?').next().unwrap_or("archivo");
-            let filename = if filename.is_empty() { "descarga" } else { filename }.to_string();
-
-            *path = downloads_dir.join(&filename);
-            let path_str = path.display().to_string();
-            let id = url_to_id(&url);
-
-            println!("[orion-download] Iniciando: {url} → {path_str}");
-            let _ = proxy_dl_start.send_event(UserEvent::DownloadStarted {
-                id,
-                url,
-                filename,
-                path: path_str,
-            });
-            true
-        })
-        .with_download_completed_handler(move |url: String, path: Option<std::path::PathBuf>, success: bool| {
-            let path_str = path.map(|p| p.display().to_string()).unwrap_or_default();
-            let status = if success { "OK" } else { "Error" };
-            println!("[orion-download] {status}: {url} → {path_str}");
-            let id = url_to_id(&url);
-            let _ = proxy_dl_done.send_event(UserEvent::DownloadCompleted {
-                id,
-                url,
-                path: path_str,
-                success,
-            });
-        })
-        .with_initialization_script(&offline_init_script)
-        .with_custom_protocol("fluxperm".into(), {
-            let permissions  = permissions.clone();
-            let proxy_perm   = proxy.clone();
-            move |_id, request: WryRequest<Vec<u8>>| {
-                let uri = request.uri().to_string();
-
-                // Parsear tipo y origen de la URL: fluxperm://localhost/check?type=camera&origin=...
-                let kind = uri.split("type=").nth(1)
-                    .and_then(|s| s.split('&').next())
-                    .unwrap_or("unknown")
-                    .to_string();
-                let origin = uri.split("origin=").nth(1)
-                    .map(|s| s.split('&').next().unwrap_or(s))
-                    .unwrap_or("unknown")
-                    .to_string();
-                let key = (origin.clone(), kind.clone());
-
-                let (allowed, pending) = {
-                    let store = permissions.lock().unwrap();
-                    match store.get(&key) {
-                        Some(&a) => (a, false),
-                        None     => (false, true),
-                    }
-                };
-
-                if pending {
-                    println!("[flux-perms] {origin} solicitó '{kind}' → pendiente, notificando UI");
-                    let _ = proxy_perm.send_event(UserEvent::PermissionRequested {
-                        origin: origin.clone(),
-                        kind:   kind.clone(),
-                    });
-                } else {
-                    println!("[flux-perms] {origin} '{kind}' → {}", if allowed { "permitido" } else { "denegado" });
-                }
-
-                let body = serde_json::json!({ "allowed": allowed, "pending": pending }).to_string();
-                WryResponse::builder()
-                    .header(CONTENT_TYPE, "application/json")
-                    .header("Access-Control-Allow-Origin", "*")
-                    .body(std::borrow::Cow::Owned(body.into_bytes()))
-                    .unwrap()
-            }
-        })
-        .build_as_child(&window)
-        .expect("No se pudo crear el WebView de contenido");
+    // ── 4a. HashMap de WebViews de contenido (uno por pestaña) ────────────
+    // Las pestañas se crean dinámicamente via IPC new_tab desde React.
+    // Cada WebView empieza oculto (0×0) y se hace visible al activarse.
+    let content_views: std::cell::RefCell<std::collections::HashMap<String, wry::WebView>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    // native_id de la pestaña activa en este momento
+    let active_native_id: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+    // Última URL realmente cargada por cada WebView (para evitar recargas innecesarias)
+    let loaded_urls: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
 
     // ── 4b. WebView del chrome — Z superior ───────────────────────────────
     let permissions_ipc = permissions.clone();
@@ -821,13 +853,42 @@ fn main() {
                             let _ = proxy.send_event(UserEvent::SetZoom(level));
                         }
                     }
+                    // ── Multi-tab: crear WebView para nueva pestaña ────────
+                    Some("new_tab") => {
+                        let native_id = val.get("native_id")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let incognito = val.get("private")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        if !native_id.is_empty() {
+                            let _ = proxy.send_event(UserEvent::NewTab { native_id, incognito });
+                        }
+                    }
+                    // ── Multi-tab: destruir WebView de pestaña cerrada ──────
+                    Some("close_tab") => {
+                        let native_id = val.get("native_id")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !native_id.is_empty() {
+                            println!("[orion-browser] close_tab → {native_id}");
+                            let _ = proxy.send_event(UserEvent::CloseTab { native_id });
+                        }
+                    }
+                    // ── Navegación con native_id de pestaña ────────────────
                     Some("navigate") => {
                         let url = val.get("url")
                             .and_then(|u| u.as_str())
                             .unwrap_or("about:blank")
                             .to_string();
-                        println!("[orion-browser] Navegación → {url}");
-                        let _ = proxy.send_event(UserEvent::Navigate(url));
+                        let native_id = val.get("native_id")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        println!("[orion-browser] navigate tab={native_id} → {url}");
+                        let _ = proxy.send_event(UserEvent::Navigate { native_id, url });
                     }
                     Some("chrome_height") => {
                         if let Some(h) = val.get("height").and_then(|h| h.as_f64()) {
@@ -940,10 +1001,16 @@ fn main() {
                 let ch = chrome_h.get();
                 let pw = ai_panel_w.get();
 
-                let _ = content_view.set_bounds(Rect {
-                    position: LogicalPosition::new(0.0, ch).into(),
-                    size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
-                });
+                // Redimensionar solo el WebView activo (los demás están a 0×0)
+                if !chrome_full.get() {
+                    let aid = active_native_id.borrow().clone();
+                    if let Some(view) = content_views.borrow().get(&aid) {
+                        let _ = view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, ch).into(),
+                            size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
+                        });
+                    }
+                }
 
                 if chrome_full.get() {
                     let _ = chrome_view.set_bounds(Rect {
@@ -1003,12 +1070,14 @@ fn main() {
                 let wh = phys.height as f64 / scale;
                 let pw = ai_panel_w.get();
 
-                let _ = content_view.set_bounds(Rect {
-                    position: LogicalPosition::new(0.0, new_h).into(),
-                    size: LogicalSize::new((w - pw).max(0.0), (wh - new_h).max(0.0)).into(),
-                });
-
                 if !chrome_full.get() {
+                    let aid = active_native_id.borrow().clone();
+                    if let Some(view) = content_views.borrow().get(&aid) {
+                        let _ = view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, new_h).into(),
+                            size: LogicalSize::new((w - pw).max(0.0), (wh - new_h).max(0.0)).into(),
+                        });
+                    }
                     let _ = chrome_view.set_bounds(Rect {
                         position: LogicalPosition::new(0.0, 0.0).into(),
                         size: LogicalSize::new(w, new_h).into(),
@@ -1027,28 +1096,42 @@ fn main() {
                 let wh = phys.height as f64 / scale;
                 let ch = chrome_h.get();
 
-                let _ = content_view.set_bounds(Rect {
-                    position: LogicalPosition::new(0.0, ch).into(),
-                    size: LogicalSize::new((w - new_pw).max(0.0), (wh - ch).max(0.0)).into(),
-                });
+                if !chrome_full.get() {
+                    let aid = active_native_id.borrow().clone();
+                    if let Some(view) = content_views.borrow().get(&aid) {
+                        let _ = view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, ch).into(),
+                            size: LogicalSize::new((w - new_pw).max(0.0), (wh - ch).max(0.0)).into(),
+                        });
+                    }
+                }
 
                 println!("[orion-browser] ai_panel_w → {new_pw}px");
             }
 
             // ── Reload / Stop / Zoom ───────────────────────────────────────
             Event::UserEvent(UserEvent::Reload) => {
-                let _ = content_view.evaluate_script("location.reload()");
+                let aid = active_native_id.borrow().clone();
+                if let Some(view) = content_views.borrow().get(&aid) {
+                    let _ = view.evaluate_script("location.reload()");
+                }
                 println!("[orion-browser] Recargando…");
             }
 
             Event::UserEvent(UserEvent::StopLoad) => {
-                let _ = content_view.evaluate_script("window.stop()");
+                let aid = active_native_id.borrow().clone();
+                if let Some(view) = content_views.borrow().get(&aid) {
+                    let _ = view.evaluate_script("window.stop()");
+                }
                 println!("[orion-browser] Deteniendo carga…");
             }
 
             Event::UserEvent(UserEvent::SetZoom(level)) => {
                 let js = format!("document.documentElement.style.zoom='{level}%'");
-                let _ = content_view.evaluate_script(&js);
+                let aid = active_native_id.borrow().clone();
+                if let Some(view) = content_views.borrow().get(&aid) {
+                    let _ = view.evaluate_script(&js);
+                }
                 println!("[orion-browser] Zoom → {level}%");
             }
 
@@ -1089,8 +1172,49 @@ fn main() {
                 } else {
                     "document.querySelectorAll('audio,video').forEach(el=>el.muted=false)"
                 };
-                let _ = content_view.evaluate_script(js);
+                let aid = active_native_id.borrow().clone();
+                if let Some(view) = content_views.borrow().get(&aid) {
+                    let _ = view.evaluate_script(js);
+                }
                 println!("[orion-browser] SetMute → {muted}");
+            }
+
+            // ── Multi-tab: crear WebView para nueva pestaña ────────────────
+            Event::UserEvent(UserEvent::NewTab { native_id, incognito }) => {
+                if !content_views.borrow().contains_key(&native_id) {
+                    let new_view = make_content_view(
+                        native_id.clone(),
+                        proxy_kbd.clone(),
+                        permissions.clone(),
+                        &offline_init_script,
+                        &window,
+                        incognito,
+                    );
+                    content_views.borrow_mut().insert(native_id, new_view);
+                }
+            }
+
+            // ── Multi-tab: destruir WebView de pestaña cerrada ─────────────
+            Event::UserEvent(UserEvent::CloseTab { native_id }) => {
+                println!("[orion-browser] Destruyendo WebView de tab {native_id}");
+                content_views.borrow_mut().remove(&native_id);
+                loaded_urls.borrow_mut().remove(&native_id);
+                let current = active_native_id.borrow().clone();
+                if current == native_id {
+                    *active_native_id.borrow_mut() = String::new();
+                }
+                // Si era la pestaña activa y estaba mostrando web, volver a chrome_full
+                if current == native_id && !chrome_full.get() {
+                    let scale = window.scale_factor();
+                    let phys  = window.inner_size();
+                    let w = phys.width  as f64 / scale;
+                    let h = phys.height as f64 / scale;
+                    chrome_full.set(true);
+                    let _ = chrome_view.set_bounds(Rect {
+                        position: LogicalPosition::new(0.0, 0.0).into(),
+                        size: LogicalSize::new(w, h).into(),
+                    });
+                }
             }
 
             // ── Descarga nativa: iniciada ──────────────────────────────────
@@ -1217,13 +1341,26 @@ fn main() {
                 let _ = chrome_view.evaluate_script(&js);
             }
 
-            // ── Navegación principal ───────────────────────────────────────
-            Event::UserEvent(UserEvent::Navigate(url)) => {
+            // ── Navegación principal (multi-tab) ──────────────────────────
+            Event::UserEvent(UserEvent::Navigate { native_id, url }) => {
                 let scale = window.scale_factor();
                 let phys  = window.inner_size();
                 let w  = phys.width  as f64 / scale;
                 let h  = phys.height as f64 / scale;
                 let ch = chrome_h.get();
+                let pw = ai_panel_w.get();
+
+                // Si cambiamos de pestaña activa, ocultar la anterior
+                let current_active = active_native_id.borrow().clone();
+                if current_active != native_id && !current_active.is_empty() {
+                    if let Some(old_view) = content_views.borrow().get(&current_active) {
+                        let _ = old_view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, 0.0).into(),
+                            size: LogicalSize::new(0.0, 0.0).into(),
+                        });
+                    }
+                }
+                *active_native_id.borrow_mut() = native_id.clone();
 
                 if url.starts_with("http://") || url.starts_with("https://") {
                     let security = SecurityLayer::new();
@@ -1235,16 +1372,18 @@ fn main() {
                                 position: LogicalPosition::new(0.0, 0.0).into(),
                                 size: LogicalSize::new(w, ch).into(),
                             });
-                            let _ = content_view.set_bounds(Rect {
-                                position: LogicalPosition::new(0.0, ch).into(),
-                                size: LogicalSize::new(w, (h - ch).max(0.0)).into(),
-                            });
                             let kind = match reason {
                                 orion_engine::security::BlockReason::AdTracker    => "blocked_tracker",
                                 orion_engine::security::BlockReason::MixedContent => "blocked_security",
                                 orion_engine::security::BlockReason::CspViolation => "blocked_security",
                             };
-                            let _ = content_view.load_html(&flux_error_page(kind, &url));
+                            if let Some(view) = content_views.borrow().get(&native_id) {
+                                let _ = view.set_bounds(Rect {
+                                    position: LogicalPosition::new(0.0, ch).into(),
+                                    size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
+                                });
+                                let _ = view.load_html(&flux_error_page(kind, &url));
+                            }
                             return;
                         }
                         UrlDecision::Upgrade(https_url) => {
@@ -1259,50 +1398,69 @@ fn main() {
                         position: LogicalPosition::new(0.0, 0.0).into(),
                         size: LogicalSize::new(w, ch).into(),
                     });
-                    let _ = content_view.set_bounds(Rect {
-                        position: LogicalPosition::new(0.0, ch).into(),
-                        size: LogicalSize::new(w, (h - ch).max(0.0)).into(),
-                    });
 
-                    println!("[orion-browser] content_view → {final_url}");
-                    let _ = content_view.load_url(&final_url);
+                    if let Some(view) = content_views.borrow().get(&native_id) {
+                        let _ = view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, ch).into(),
+                            size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
+                        });
+                        // Solo recargar si la URL cambió (evitar recargas en cambio de pestaña)
+                        let last = loaded_urls.borrow().get(&native_id).cloned().unwrap_or_default();
+                        if last != final_url {
+                            loaded_urls.borrow_mut().insert(native_id.clone(), final_url.clone());
+                            println!("[orion-browser] tab={native_id} → {final_url}");
+                            let _ = view.load_url(&final_url);
+                        } else {
+                            println!("[orion-browser] tab={native_id} ya tiene {final_url} (sin recarga)");
+                        }
+                    }
 
                 } else {
-                    // flux:// → React renderiza, chrome ocupa toda la ventana
+                    // flux:// → React renderiza, el WebView de contenido se oculta
                     chrome_full.set(true);
                     let _ = chrome_view.set_bounds(Rect {
                         position: LogicalPosition::new(0.0, 0.0).into(),
                         size: LogicalSize::new(w, h).into(),
                     });
-                    println!("[orion-browser] content_view → {url}");
-                    let _ = content_view.load_url(&url);
+                    // Asegurarse de que el WebView de esta pestaña esté oculto
+                    if let Some(view) = content_views.borrow().get(&native_id) {
+                        let _ = view.set_bounds(Rect {
+                            position: LogicalPosition::new(0.0, 0.0).into(),
+                            size: LogicalSize::new(0.0, 0.0).into(),
+                        });
+                    }
                 }
             }
 
             // ── window.open() / target="_blank" / OAuth ────────────────────
-            Event::UserEvent(UserEvent::NavigateDirect(url)) => {
+            Event::UserEvent(UserEvent::NavigateDirect { native_id, url }) => {
                 let scale = window.scale_factor();
                 let phys  = window.inner_size();
                 let w  = phys.width  as f64 / scale;
                 let h  = phys.height as f64 / scale;
                 let ch = chrome_h.get();
+                let pw = ai_panel_w.get();
 
                 chrome_full.set(false);
                 let _ = chrome_view.set_bounds(Rect {
                     position: LogicalPosition::new(0.0, 0.0).into(),
                     size: LogicalSize::new(w, ch).into(),
                 });
-                let _ = content_view.set_bounds(Rect {
-                    position: LogicalPosition::new(0.0, ch).into(),
-                    size: LogicalSize::new(w, (h - ch).max(0.0)).into(),
-                });
-
-                println!("[orion-browser] NavigateDirect → {url}");
-                let _ = content_view.load_url(&url);
+                if let Some(view) = content_views.borrow().get(&native_id) {
+                    let _ = view.set_bounds(Rect {
+                        position: LogicalPosition::new(0.0, ch).into(),
+                        size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
+                    });
+                    loaded_urls.borrow_mut().insert(native_id.clone(), url.clone());
+                    println!("[orion-browser] NavigateDirect tab={native_id} → {url}");
+                    let _ = view.load_url(&url);
+                }
             }
 
             // ── Actualizar barra de direcciones en React ───────────────────
-            Event::UserEvent(UserEvent::UpdateAddressBar(url)) => {
+            // También actualiza loaded_urls para evitar recarga al volver a esta pestaña
+            Event::UserEvent(UserEvent::UpdateAddressBar { native_id, url }) => {
+                loaded_urls.borrow_mut().insert(native_id, url.clone());
                 let safe = url.replace('\\', "\\\\").replace('\'', "\\'");
                 let _ = chrome_view.evaluate_script(&format!(
                     "window.dispatchEvent(new CustomEvent('orion:urlchange',\

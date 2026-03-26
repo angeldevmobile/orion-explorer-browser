@@ -20,7 +20,7 @@ wry        = "0.47"
 # Decodificar el icono .ico/.png para la ventana nativa
 image      = { version = "0.25", default-features = false, features = ["ico", "png"] }
 # ── Fase 4: renderer de píxeles real ──────────────────────────
-winit      = "0.29"
+winit      = "0.30"
 softbuffer = "0.4"
 fontdue    = "0.8"
 # ── Fase 5: JavaScript ligero ──────────────────────────────────

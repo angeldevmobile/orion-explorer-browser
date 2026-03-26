@@ -1,7 +1,7 @@
 import { Response } from "express";
 import prisma from "../config/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
-import { EncryptionService } from "../services/encrytionService";
+import { EncryptionService } from "../services/encryptionService";
 
 export class UserController {
   /**

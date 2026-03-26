@@ -100,13 +100,19 @@ export function useTabs() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isAuthenticated]);
 
-	const handleNewTab = useCallback(async () => {
+	const handleNewTab = useCallback(async (isPrivate = false) => {
 		const tempId = `temp-${Date.now()}`;
-		const newTab: Tab = { id: tempId, title: "Nueva pestaña", url: "flux://newtab" };
+		const newTab: Tab = {
+			id: tempId,
+			title: isPrivate ? "Pestaña privada" : "Nueva pestaña",
+			url: "flux://newtab",
+			private: isPrivate,
+		};
 		setTabs((prev) => [...prev, newTab]);
 		setActiveTabId(tempId);
 
-		if (isAuthenticated) {
+		// Las pestañas privadas no se persisten en base de datos
+		if (isAuthenticated && !isPrivate) {
 			try {
 				const created = await tabService.createTab({
 					url: "flux://newtab",
@@ -153,6 +159,9 @@ export function useTabs() {
 	const handleTabUrlChange = useCallback(
 		(tabId: string, newUrl: string) => {
 			updateTab(tabId, "url", newUrl);
+			// No guardar historial/stats si la pestaña es privada
+			const tab = tabs.find((t) => t.id === tabId);
+			if (tab?.private) return;
 			if (isAuthenticated && !tabId.startsWith("temp-") && !tabId.startsWith("default")) {
 				try {
 					const parsedUrl = new URL(newUrl);
@@ -170,7 +179,7 @@ export function useTabs() {
 				}
 			}
 		},
-		[isAuthenticated, updateTab],
+		[isAuthenticated, updateTab, tabs],
 	);
 
 	return {
