@@ -60,9 +60,10 @@ export class SearchController {
   }
 
   /**
-   * GET /api/search/web?q=texto — Buscar en la web via SearXNG
+   * GET /api/search/web?q=texto — Buscar en la web via SearXNG + re-ranking por historial
+   * Auth opcional: si hay token válido, aplica boost a URLs visitadas previamente.
    */
-  static async webSearch(req: Request, res: Response) {
+  static async webSearch(req: AuthenticatedRequest, res: Response) {
     const { q } = req.query;
 
     if (!q || typeof q !== "string" || !q.trim()) {
@@ -77,8 +78,6 @@ export class SearchController {
       const searxData = await searchWeb(query, page);
       const urls = searxData.results.map((r) => r.url).slice(0, 10);
 
-      // Mapa de fallbacks por URL: SearXNG ya tiene title/description del índice.
-      // El engine puede fallar en páginas JS-rendered o con bot-protection.
       const searxFallback = new Map(searxData.results.map((r) => [r.url, r]));
 
       // 2. Orion Engine procesa y rankea las URLs
@@ -97,24 +96,73 @@ export class SearchController {
         engine: string;
       };
 
-      res.json({
-        query: orionData.query,
-        results: orionData.results.map((r) => {
+      // 3. Re-ranking por historial (solo si hay userId autenticado)
+      let historyBoost = new Map<string, number>();
+      if (req.userId) {
+        const visitedUrls = orionData.results.map((r) => r.url);
+        const historyMatches = await prisma.history.groupBy({
+          by: ["url"],
+          where: { userId: req.userId, url: { in: visitedUrls } },
+          _count: { url: true },
+        });
+        // Normaliza visitas a un boost máximo de 0.3
+        const maxVisits = Math.max(...historyMatches.map((h) => h._count.url), 1);
+        for (const h of historyMatches) {
+          historyBoost.set(h.url, (h._count.url / maxVisits) * 0.3);
+        }
+      }
+
+      const results = orionData.results
+        .map((r) => {
           const fallback = searxFallback.get(r.url);
+          const boost = historyBoost.get(r.url) ?? 0;
           return {
             url:       r.url,
-            // El engine extrae directo del HTML — si falla, usar lo de SearXNG
             title:     r.title       || fallback?.title   || r.url,
             content:   r.description || fallback?.content || "",
             thumbnail: r.image       ?? fallback?.thumbnail ?? "",
-            score:     r.score,
+            score:     r.score + boost,
+            visited:   boost > 0,
           };
-        }),
-        total:  orionData.results.length,
-        source: orionData.engine,
+        })
+        .sort((a, b) => b.score - a.score);
+
+      res.json({
+        query:   orionData.query,
+        results,
+        total:   results.length,
+        source:  orionData.engine,
+        cached:  false,
       });
     } catch (error) {
       res.status(502).json({ error: "Error al conectar con el motor de búsqueda" });
+    }
+  }
+
+  /**
+   * GET /api/search/summary?q=texto — Resumen IA de los resultados de búsqueda (requiere auth)
+   */
+  static async summarizeSearch(req: AuthenticatedRequest, res: Response) {
+    const { q } = req.query;
+
+    if (!q || typeof q !== "string" || !q.trim()) {
+      return res.status(400).json({ error: "Parámetro 'q' requerido" });
+    }
+
+    const query = q.trim();
+
+    try {
+      const searxData = await searchWeb(query, 1);
+      const top5 = searxData.results.slice(0, 5).map((r) => ({
+        title:   r.title,
+        content: r.content,
+        url:     r.url,
+      }));
+
+      const summary = await geminiService.summarizeSearchResults(query, top5);
+      res.json(summary);
+    } catch (error) {
+      res.status(502).json({ error: "Error al generar resumen" });
     }
   }
 }

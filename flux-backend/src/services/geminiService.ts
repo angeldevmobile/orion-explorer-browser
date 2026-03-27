@@ -303,6 +303,37 @@ export class GeminiService {
     };
   }
 
+  async summarizeSearchResults(query: string, results: { title: string; content: string; url: string }[]) {
+    const resultsText = results
+      .map((r, i) => `[${i + 1}] ${r.title}\n${r.content}\nFuente: ${r.url}`)
+      .join("\n\n");
+
+    const prompt = `
+      Eres Orion, asistente del navegador Flux. El usuario buscó: "${query}"
+
+      Estos son los principales resultados encontrados:
+      ${resultsText}
+
+      Genera un resumen útil y directo basado en estos resultados.
+
+      REGLAS:
+      - Máximo 3 oraciones claras y concretas
+      - Enfócate en responder la intención del usuario
+      - No inventes información que no esté en los resultados
+      - Tono natural, no robótico
+
+      RESPONDE EN JSON:
+      {
+        "summary": "Resumen directo de 2-3 oraciones",
+        "keyPoints": ["Punto clave 1", "Punto clave 2", "Punto clave 3"],
+        "topSource": "URL de la fuente más relevante"
+      }
+    `;
+
+    const result = await this.model.generateContent(prompt);
+    return parseGeminiJson(result.response.text());
+  }
+
   clearHistory() {
     this.conversationHistory = [];
   }
