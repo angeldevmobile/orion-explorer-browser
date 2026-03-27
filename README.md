@@ -63,6 +63,60 @@ El 70% de las vulnerabilidades de Chrome y Firefox son errores de memoria en C++
 
 ---
 
+## Seguridad y privacidad
+
+Flux está diseñado desde cero con un modelo **privacy-first y local-first**. Ningún dato del usuario sale del dispositivo sin su consentimiento explícito.
+
+### Qué hace Flux para protegerte
+
+| Capa | Protección |
+|---|---|
+| **HTTPS-only** | Upgrade automático HTTP → HTTPS en todas las peticiones antes de cargar la página |
+| **HSTS preload** | Lista embebida de dominios que siempre usan HTTPS — no hay primera petición insegura |
+| **Ad/tracker blocker** | Bloqueo de ~40 dominios de rastreo y publicidad (EasyList/EasyPrivacy subset) integrado en el engine Rust |
+| **CSP enforcement** | Parseo y aplicación del `Content-Security-Policy` del servidor — bloquea scripts inline no autorizados y peticiones `fetch()` fuera de `connect-src` |
+| **JS sandbox** | El runtime JavaScript corre en QuickJS con 16 MB de heap y 512 KB de stack máximo — sin acceso al filesystem ni al sistema operativo |
+| **Permisos explícitos** | Cámara, micrófono y geolocalización requieren confirmación del usuario vía barra de permisos nativa — igual que Chrome/Firefox |
+| **Datos 100% locales** | Historial, favoritos, notas, tareas y contraseñas se guardan en `flux.db` (SQLite local) — nunca en servidores externos |
+| **Sin telemetría** | Flux no envía datos de uso, crashlogs ni métricas a ningún servidor |
+| **Búsqueda privada** | Flux Search usa SearXNG self-hosted — las búsquedas no llegan a Google ni Bing |
+| **Rust sin memory bugs** | Buffer overflows, use-after-free y null pointers son imposibles en safe Rust — las categorías de vulnerabilidades más comunes en navegadores C++ no existen |
+
+### Qué NO hace Flux (a diferencia de Chrome)
+
+- No tiene cuenta de Google obligatoria
+- No sincroniza datos sin que lo actives
+- No guarda historial de búsquedas en servidores externos
+- No fingerprinting de hardware para publicidad
+- No extensiones de terceros con acceso a tus datos de navegación
+
+---
+
+## RAM y rendimiento
+
+### Arquitectura de procesos
+
+```
+flux-browser.exe   ← proceso principal Rust
+  ├── chrome_view   ← WebView2 para la UI React del browser
+  ├── content_view  ← WebView2 para las páginas web
+  └── flux-backend  ← sidecar Node.js (SQLite local, se comparte entre todas las pestañas)
+```
+
+> **Nota sobre WebView2:** Flux usa WebView2 como superficie de renderizado provisional mientras el motor propio madura. WebView2 es Chromium — el consumo de RAM de las páginas web es comparable al de Edge/Chrome. Lo que Flux elimina es el overhead de extensiones, sincronización en la nube, telemetría y procesos de background de Google.
+
+### Lo que Flux hace para reducir el consumo de RAM
+
+- **Sin motor de extensiones** — sin procesos de background por extensión
+- **Sin sincronización en la nube** — sin workers de sync activos
+- **Backend SQLite local** — sin pools de conexión a bases de datos externas
+- **Engine Rust arena-based** — estructuras de datos contiguas sin fragmentación de heap
+- **Tab discard automático** — las pestañas inactivas por más de 10 minutos liberan su memoria automáticamente
+
+Cuando el motor propio (FluxSoftRenderer) reemplace a WebView2, el consumo bajará significativamente — ese es uno de los objetivos del roadmap.
+
+---
+
 ## Arquitectura
 
 ```
@@ -147,7 +201,7 @@ URL
                           · Inline formatting context + word wrapping
                           · text-align (left/center/right)
                           └─→ Display List (paint commands)
-                               └─→ OrionSoftRenderer
+                               └─→ FluxSoftRenderer
                                     · Pixel buffer XRGB8888
                                     · Glyph atlas (fontdue cache)
                                     · Alpha blending
@@ -161,7 +215,7 @@ URL
 | 1 | Tokenizer zero-copy + Parser DOM arena | 
 | 2 | Style resolution + UA stylesheet completo | 
 | 3 | Inline layout + word wrapping + text-align | 
-| 4 | OrionSoftRenderer — pixel buffer real con fontdue | 
+| 4 | FluxSoftRenderer — pixel buffer real con fontdue |
 | 5 | JavaScript con QuickJS — DOM bindings + fetch + eventos | 
 | 6 | Security layer — CSP + HTTPS-only + HSTS + ad blocker | 
 | 7 | Descargador de medios — yt-dlp bundleado con progreso en tiempo real | 
@@ -249,7 +303,7 @@ flux-engine/
     ├── paint/              ← display list de comandos
     ├── renderer/
     │   ├── mod.rs          ← ConsoleRenderer (debug)
-    │   ├── soft.rs         ← OrionSoftRenderer (pixel buffer)
+    │   ├── soft.rs         ← FluxSoftRenderer (pixel buffer)
     │   └── font.rs         ← gestión de fuentes
     ├── js/                 ← JavaScript runtime (QuickJS)
     ├── security/           ← CSP · HTTPS · HSTS · ad blocker
@@ -479,7 +533,7 @@ docker compose up -d
 - [x] Inline layout + word wrapping
 - [x] text-align (left / center / right)
 - [x] Display list con paint commands
-- [x] OrionSoftRenderer — pixel buffer XRGB8888
+- [x] FluxSoftRenderer — pixel buffer XRGB8888
 - [x] Glyph atlas con fontdue (cache de glifos rasterizados)
 - [x] Alpha blending
 - [x] JavaScript ligero — rquickjs (QuickJS embebido, ~10 MB)
@@ -495,7 +549,7 @@ docker compose up -d
 - [x] yt-dlp bundleado — sin instalación manual para el usuario
 - [x] flux-backend.exe como sidecar — arranca y cierra con el browser
 - [x] Sistema de permisos nativos (cámara, micrófono, notificaciones) via Rust
-- [ ] Conectar OrionSoftRenderer al content_view de la ventana nativa
+- [ ] Conectar FluxSoftRenderer al content_view de la ventana nativa
 - [ ] Flexbox layout
 - [ ] Imágenes (`<img>` decodificada y pintada en el buffer)
 - [ ] Cookie jar por dominio
@@ -549,7 +603,7 @@ docker compose up -d
 - [x] Reader Mode
 - [x] Panel de descargas
 - [x] Flux AI (Gemini) — página completa
-- [x] Panel lateral flotante de IA (OrionAISidePanel) — contextual con URL y título
+- [x] Panel lateral flotante de IA (FluxAISidePanel) — contextual con URL y título
 - [x] Selector de tema
 - [x] Estadísticas de uso
 - [x] Configuración completa
@@ -585,7 +639,7 @@ flux-browser/
 │       ├── api/           ← Axum HTTP server :4000
 │       ├── js/            ← JavaScript runtime (QuickJS)
 │       ├── security/      ← CSP · HTTPS · HSTS · ad blocker
-│       ├── renderer/      ← OrionSoftRenderer (pixel buffer)
+│       ├── renderer/      ← FluxSoftRenderer (pixel buffer)
 │       ├── layout/        ← Block + Inline layout
 │       ├── style/         ← CSS cascade + UA stylesheet
 │       ├── paint/         ← Display list
