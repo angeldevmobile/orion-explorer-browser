@@ -379,7 +379,7 @@
     <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
       <!-- Logo -->
       <a href="index.html" class="flex items-center gap-3">
-        <img src="../assets/flux_logo.png" alt="Flux Logo" style="width:44px;height:44px;border-radius:12px;box-shadow:0 0 20px rgba(6,182,212,0.6);" />
+        <img src="../assets/flux_logo.png" alt="Flux Logo" style="width:52px;height:52px;border-radius:8px;box-shadow:0 0 22px rgba(6,182,212,0.55);object-fit:contain;" />
         <span style="font-size:20px; font-weight:800; background: linear-gradient(135deg,#06b6d4,#2dd4bf); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Flux Browser</span>
       </a>
       <!-- Nav links -->
@@ -685,8 +685,14 @@
       </div>
 
       <!-- Rendering Pipeline animated -->
-      <div class="glass-card p-8" id="pipeline-section">
-        <h3 class="text-white font-bold text-lg mb-8 text-center">Pipeline de Renderizado</h3>
+      <div class="glass-card p-8" id="pipeline-section" style="border-color:rgba(245,158,11,0.25);">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+          <h3 class="text-white font-bold text-lg">Pipeline de Renderizado</h3>
+          <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:6px 14px;">
+            <svg style="width:14px;height:14px;flex-shrink:0;stroke:#f59e0b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span style="font-size:12px;color:#f59e0b;font-weight:600;">En construcción — aún no conectado a la ventana principal</span>
+          </div>
+        </div>
         <div class="flex flex-wrap items-center justify-center gap-2" id="pipeline-steps">
           <div class="pip-step pipeline-box" style="transition-delay:0s;">HTML</div>
           <div class="pip-step pip-arrow" style="transition-delay:0.05s;">→</div>
@@ -710,7 +716,7 @@
             <svg style="width:14px;height:14px;flex-shrink:0;stroke:#4ade80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>SecurityLayer activo en cada petición — HTTPS · HSTS · CSP · AdBlock
           </div>
         </div>
-        <p class="text-center text-slate-500 text-sm mt-4">Todo implementado en Rust puro — sin dependencias de WebKit, Blink o Gecko</p>
+        <p class="text-center text-slate-500 text-sm mt-4">El pipeline está implementado en Rust. La integración con la ventana nativa es el próximo paso del roadmap.</p>
       </div>
     </div>
   </section>
@@ -733,16 +739,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr><td class="font-semibold text-white">HTTPS-only</td><td>Upgrade automático de toda conexión HTTP a HTTPS</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">HSTS Enforcement</td><td>HTTP Strict Transport Security aplicado globalmente</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">Ad Blocker</td><td>Bloqueo a nivel de red + DOM CSS injection</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">YouTube Blocker</td><td>Interceptación específica del reproductor YT sin anuncios</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">CSP Enforcement</td><td>Content-Security-Policy aplicada en cada respuesta</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">JS Sandbox</td><td>Contexto JavaScript aislado con permisos granulares</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">Permisos Explícitos</td><td>Cámara, micrófono, notificaciones — siempre con aprobación manual</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">Datos 100% locales</td><td>SQLite local — historial/favoritos/notas nunca salen del dispositivo</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">Sin telemetría</td><td>Cero datos enviados a servidores externos de ningún tipo</td><td><span class="check-green">✓ Activo</span></td></tr>
-            <tr><td class="font-semibold text-white">Rust Memory Safety</td><td>Sin buffer overflows, sin use-after-free — garantizado por el compilador</td><td><span class="check-green">✓ Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">HTTPS-only</td><td>Upgrade automático de toda conexión HTTP a HTTPS</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">HSTS Enforcement</td><td>HTTP Strict Transport Security aplicado globalmente</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">Ad Blocker</td><td>Bloqueo a nivel de red + DOM CSS injection</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">YouTube Blocker</td><td>Interceptación específica del reproductor YT sin anuncios</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">CSP Enforcement</td><td>Content-Security-Policy aplicada en cada respuesta</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">JS Sandbox</td><td>Contexto JavaScript aislado con permisos granulares</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">Permisos Explícitos</td><td>Cámara, micrófono, notificaciones — siempre con aprobación manual</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">Datos 100% locales</td><td>SQLite local — historial/favoritos/notas nunca salen del dispositivo</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">Sin telemetría</td><td>Cero datos enviados a servidores externos de ningún tipo</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
+            <tr><td class="font-semibold text-white">Rust Memory Safety</td><td>Sin buffer overflows, sin use-after-free — garantizado por el compilador</td><td><span class="check-green"><svg style="width:13px;height:13px;display:inline;vertical-align:middle;margin-right:2px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Activo</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -1175,7 +1181,7 @@
       renderComments();
       const btn = document.getElementById('comment-submit-btn');
       const orig = btn.innerHTML;
-      btn.innerHTML = '✓ ¡Publicado!';
+      btn.innerHTML = '<svg style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>¡Publicado!';
       btn.style.background = 'linear-gradient(135deg,#4ade80,#22c55e)';
       setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2200);
     });

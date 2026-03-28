@@ -211,40 +211,6 @@
       </div>
     </section>
 
-    <!-- Backend -->
-    <section>
-      <h2 class="text-2xl font-black text-white mb-6 flex items-center gap-3">
-        <span style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:8px;padding:6px 10px;display:inline-flex;align-items:center;justify-content:center;"><svg style="width:18px;height:18px;stroke:#06b6d4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12c0 1.66-4.03 3-9 3S3 13.66 3 12M21 5v14c0 1.66-4.03 3-9 3S3 20.66 3 19V5"/></svg></span>
-        flux-backend
-      </h2>
-      <p class="text-slate-400 text-sm mb-5">Backend Node.js + Express que gestiona los datos de usuario. Se distribuye como exe standalone — el usuario no necesita Node.js instalado.</p>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6 text-sm">
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">Runtime</p><p class="text-slate-300 font-medium">Node.js + TypeScript</p></div>
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">Framework</p><p class="text-slate-300 font-medium">Express 5</p></div>
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">ORM</p><p class="text-slate-300 font-medium">Prisma</p></div>
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">Base de datos</p><p class="text-slate-300 font-medium">SQLite (flux.db local)</p></div>
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">Auth</p><p class="text-slate-300 font-medium">JWT + bcrypt</p></div>
-        <div class="glass-card p-4"><p class="text-slate-500 text-xs mb-1">Distribución</p><p class="text-slate-300 font-medium">@yao-pkg/pkg → .exe</p></div>
-      </div>
-
-      <h3 class="text-white font-bold mb-3">Endpoints principales</h3>
-      <div class="glass-card overflow-hidden">
-        <table class="flux-table">
-          <thead><tr><th>Endpoint</th><th>Descripción</th></tr></thead>
-          <tbody>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/search/web?q=</code></td><td>Búsqueda web via SearXNG + re-ranking Rust + boost por historial</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/search/summary?q=</code></td><td>Resumen IA de resultados via Gemini (requiere auth)</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/suggestions?q=</code></td><td>Autocompletado en barra de direcciones</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/news</code></td><td>Noticias en tiempo real vía RSS (BBC, TechCrunch, NASA, Al Jazeera)</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/weather?city=</code></td><td>Clima actual vía wttr.in</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">GET /api/trends</code></td><td>Tendencias de Google Trends vía RSS</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">POST /api/translation/translate</code></td><td>Traducción de texto (Gemini + fallback MyMemory)</td></tr>
-            <tr><td><code style="font-size:12px;color:#06b6d4;">POST /api/translation/detect</code></td><td>Detección de idioma</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
     <!-- Rust vs C++ -->
     <section>
       <h2 class="text-2xl font-black text-white mb-6 flex items-center gap-3">
@@ -281,36 +247,56 @@
       </div>
     </section>
 
-    <!-- Compilar -->
+    <!-- Próximos pasos -->
     <section>
       <h2 class="text-2xl font-black text-white mb-6 flex items-center gap-3">
-        <span style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:8px;padding:6px 10px;display:inline-flex;align-items:center;justify-content:center;"><svg style="width:18px;height:18px;stroke:#06b6d4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z"/></svg></span>
-        Compilar desde el código fuente
+        <span style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);border-radius:8px;padding:6px 10px;display:inline-flex;align-items:center;justify-content:center;"><svg style="width:18px;height:18px;stroke:#06b6d4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg></span>
+        Próximos pasos
       </h2>
-      <div class="glass-card p-6 mb-4">
-        <p class="text-slate-400 text-sm mb-4">Requisitos: <span class="text-slate-300 font-medium">Rust 1.75+</span>, <span class="text-slate-300 font-medium">Node.js 18+</span>, <span class="text-slate-300 font-medium">Windows 10/11 con WebView2</span></p>
-        <div style="background:rgba(2,6,23,0.7);border-radius:10px;padding:18px;font-family:monospace;font-size:13px;line-height:2;">
-          <div style="color:#94a3b8;"># 1. Clonar</div>
-          <div style="color:#2dd4bf;">git clone https://github.com/tu-usuario/flux-browser.git</div>
-          <div style="color:#94a3b8;margin-top:6px;"># 2. Descargar yt-dlp (una sola vez)</div>
-          <div style="color:#2dd4bf;">.\scripts\download-yt-dlp.ps1</div>
-          <div style="color:#94a3b8;margin-top:6px;"># 3. Compilar el backend</div>
-          <div style="color:#2dd4bf;">.\scripts\build-backend.ps1</div>
-          <div style="color:#94a3b8;margin-top:6px;"># 4. Compilar el browser</div>
-          <div style="color:#2dd4bf;">cd flux-engine</div>
-          <div style="color:#2dd4bf;">cargo build --release --bin flux-browser</div>
-          <div style="color:#94a3b8;margin-top:6px;"># 5. Ejecutar el motor solo (demo píxeles)</div>
-          <div style="color:#06b6d4;">cargo run --bin flux-render</div>
+      <p class="text-slate-400 text-sm mb-6">El motor de renderizado de Flux está construido y funcional. Lo que viene ahora es conectarlo como superficie principal de visualización del browser.</p>
+      <div class="space-y-4">
+        <div class="glass-card p-5" style="border-color:rgba(245,158,11,0.25);">
+          <div class="flex items-start gap-4">
+            <div style="width:36px;height:36px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg style="width:16px;height:16px;stroke:#f59e0b" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3"/></svg>
+            </div>
+            <div>
+              <p class="text-white font-semibold text-sm mb-1">Conectar FluxSoftRenderer al content_view nativo</p>
+              <p class="text-slate-400 text-sm leading-relaxed">El paso pendiente: que el pixel buffer generado por el motor Rust sea la pantalla real del browser, reemplazando WebView2 como superficie de renderizado.</p>
+              <span style="display:inline-block;margin-top:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:4px;padding:2px 8px;font-size:11px;color:#f59e0b;font-weight:600;">En desarrollo</span>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card p-5">
+          <div class="flex items-start gap-4">
+            <div style="width:36px;height:36px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg style="width:16px;height:16px;stroke:#06b6d4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h8"/></svg>
+            </div>
+            <div>
+              <p class="text-white font-semibold text-sm mb-1">Soporte completo de CSS Grid y Flexbox</p>
+              <p class="text-slate-400 text-sm leading-relaxed">El layout engine actual cubre inline y block. Grid y Flexbox son el siguiente bloque del pipeline.</p>
+              <span style="display:inline-block;margin-top:8px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:4px;padding:2px 8px;font-size:11px;color:#06b6d4;font-weight:600;">Roadmap</span>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card p-5">
+          <div class="flex items-start gap-4">
+            <div style="width:36px;height:36px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg style="width:16px;height:16px;stroke:#06b6d4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01"/></svg>
+            </div>
+            <div>
+              <p class="text-white font-semibold text-sm mb-1">macOS y Linux</p>
+              <p class="text-slate-400 text-sm leading-relaxed">El engine Rust ya compila en macOS. El empaquetado como .app y soporte GTK en Linux están en el roadmap post-beta.</p>
+              <span style="display:inline-block;margin-top:8px;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.2);border-radius:4px;padding:2px 8px;font-size:11px;color:#06b6d4;font-weight:600;">Roadmap</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="glass-card p-5">
-        <p class="text-slate-400 text-sm mb-3"><span style="color:#06b6d4;font-weight:600;">Variables de entorno del backend</span> (flux-backend/.env)</p>
-        <div style="background:rgba(2,6,23,0.7);border-radius:8px;padding:14px;font-family:monospace;font-size:12px;line-height:1.9;">
-          <div style="color:#94a3b8;">DATABASE_URL=<span style="color:#2dd4bf;">file:./flux.db</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# SQLite local</div>
-          <div style="color:#94a3b8;">JWT_SECRET=<span style="color:#2dd4bf;">cambia_esto_por_un_secret_largo</span></div>
-          <div style="color:#94a3b8;">GEMINI_API_KEY=<span style="color:#2dd4bf;">tu_api_key_aqui</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# para IA, OCR, canciones</div>
-          <div style="color:#94a3b8;">PORT=<span style="color:#2dd4bf;">[configurable]</span></div>
-        </div>
+      <div class="mt-6 text-center">
+        <a href="changelog.html" class="btn-secondary px-6 py-3 rounded-xl text-sm inline-flex items-center gap-2">
+          <svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          Ver changelog completo y roadmap
+        </a>
       </div>
     </section>
 
