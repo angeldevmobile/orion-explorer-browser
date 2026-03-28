@@ -2,11 +2,11 @@
 //  Flux RENDER — Fase 5+6: JS + Seguridad
 //
 //  Stack: winit 0.30 + softbuffer 0.4 + fontdue 0.8 + QuickJS
-//  Pipeline: HTML → CSS → JS → mutations → layout → paint
+//  Pipeline: HTML -> CSS -> JS -> mutations -> layout -> paint
 //
 //  Uso:
-//    cargo run --bin orion-render
-//    Flux_FONT=/ruta/fuente.ttf cargo run --bin orion-render
+//    cargo run --bin flux-render
+//    Flux_FONT=/ruta/fuente.ttf cargo run --bin flux-render
 // ============================================================
 
 use std::num::NonZeroU32;

@@ -454,6 +454,20 @@ Chrome del navegador construido en React + Tailwind. Rodea el contenido con la i
 
 ---
 
+## Plataformas
+
+| Plataforma | Estado | Notas |
+|---|---|---|
+| **Windows 10 / 11** |  Disponible (Beta 1) | `.exe` nativo, WebView2 preinstalado en Win11 |
+| **macOS 11+** | Próximamente | El engine Rust ya compila en macOS — falta empaquetar como `.app` |
+| **Linux** |  Investigación | wry soporta GTK/WebKitGTK — sin fecha estimada |
+| **Android** |  Largo plazo | Requiere reescribir el backend y adaptar la UI para táctil |
+| **iOS** |  Largo plazo | Mismo roadmap que Android |
+
+> Flux es una aplicación de escritorio nativa. No usa Electron ni Docker — es un `.exe` directo que arranca solo.
+
+---
+
 ## Instalación (beta pública)
 
 ### El usuario solo instala el navegador — sin dependencias externas

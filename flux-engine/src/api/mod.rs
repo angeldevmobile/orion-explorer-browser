@@ -57,7 +57,7 @@ pub struct ProcessResponse {
     pub engine:  String,
 }
 
-/// POST /process — pipeline principal de Orion Engine
+/// POST /process — pipeline principal de Flux Engine
 async fn process(
     State(state): State<Arc<AppState>>,
     Json(req): Json<ProcessRequest>,
@@ -147,7 +147,7 @@ async fn render_page(
                 .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
                 .body(Body::from(format!(
                     "<html><body style='font-family:sans-serif;padding:2rem'>\
-                     <h1>🛡️ Bloqueado por Orion</h1><p>{}</p></body></html>",
+                     <h1>Bloqueado por Flux</h1><p>{}</p></body></html>",
                     reason
                 )))
                 .unwrap()
@@ -171,7 +171,7 @@ async fn render_page(
 async fn health() -> impl IntoResponse {
     Json(serde_json::json!({
         "status": "ok",
-        "engine": "Orion Engine",
+        "engine": "Flux Engine",
         "version": env!("CARGO_PKG_VERSION")
     }))
 }

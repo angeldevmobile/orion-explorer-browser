@@ -1,24 +1,16 @@
-// ============================================================
-//  ORION BROWSER — Punto de entrada del navegador nativo
+// Flux Browser — punto de entrada del navegador nativo.
 //
-//  Arquitectura de seguridad:
-//    - SecurityLayer se aplica en el navigation_handler (sync, en-proceso)
-//    - WebView2 carga páginas con su origen real → cookies y sesiones funcionan
-//    - El engine HTTP (:4000) sigue para búsqueda + ranking BM25
-//    - window.open() / target="_blank" → NavigateDirect (sin bloqueo)
+// La ventana es un WebView2 de chrome (React UI) encima de uno o más
+// WebViews de contenido (uno por pestaña). La comunicación va por IPC wry.
 //
-//  IPC commands (chrome React → Rust):
-//    navigate, reload, stop, zoom, minimize, maximize, close, drag_window,
-//    chrome_height, search, download_media, cancel_download, show_in_folder,
-//    set_mute
+// IPC React => Rust: navigate, reload, stop, zoom, minimize, maximize, close,
+//   drag_window, chrome_height, new_tab, close_tab, download_media, set_mute,
+//   show_in_folder, permission_decision, ai_panel
 //
-//  Eventos (Rust → chrome React, via evaluate_script):
-//    orion:urlchange           — URL actual cambió (link click / redirect)
-//    orion:focusaddressbar     — Ctrl+L pulsado
-//    orion:download:started    — descarga iniciada (nativa o yt-dlp)
-//    orion:download:progress   — progreso de descarga
-//    orion:download:done       — descarga terminada
-// ============================================================
+// Eventos Rust → React (via evaluate_script / CustomEvent):
+//   flux:urlchange, flux:focusaddressbar,
+//   flux:download:started, flux:download:progress, flux:download:done,
+//   flux:permission:requested
 
 use tao::{
     dpi::{LogicalPosition, LogicalSize},
@@ -372,7 +364,7 @@ fn find_ytdlp() -> std::path::PathBuf {
             .unwrap_or(std::path::Path::new("."))
             .join("yt-dlp.exe");
         if bundled.exists() {
-            println!("[orion-ytdl] yt-dlp encontrado (bundleado): {}", bundled.display());
+            println!("[flux-ytdl] yt-dlp encontrado (bundleado): {}", bundled.display());
             return bundled;
         }
     }
@@ -389,14 +381,14 @@ fn find_ytdlp() -> std::path::PathBuf {
         ];
         for candidate in candidates.iter().flatten() {
             if candidate.exists() {
-                println!("[orion-ytdl] yt-dlp encontrado (dev/bin): {}", candidate.display());
+                println!("[flux-ytdl] yt-dlp encontrado (dev/bin): {}", candidate.display());
                 return candidate.clone();
             }
         }
     }
 
     // 3. Fallback: PATH del sistema
-    println!("[orion-ytdl] yt-dlp buscando en PATH del sistema…");
+    println!("[flux-ytdl] yt-dlp buscando en PATH del sistema…");
     std::path::PathBuf::from("yt-dlp")
 }
 
@@ -528,10 +520,10 @@ fn run_ytdlp(
 
     args.push(url.clone());
 
-    println!("[orion-ytdl] Ejecutando: yt-dlp {}", args.join(" "));
+    println!("[flux-ytdl] Ejecutando: yt-dlp {}", args.join(" "));
 
     let ytdlp_bin = find_ytdlp();
-    println!("[orion-ytdl] Usando: {}", ytdlp_bin.display());
+    println!("[flux-ytdl] Usando: {}", ytdlp_bin.display());
 
     let mut child = match std::process::Command::new(&ytdlp_bin)
         .args(&args)
@@ -541,7 +533,7 @@ fn run_ytdlp(
     {
         Ok(c) => c,
         Err(e) => {
-            println!("[orion-ytdl] Error al iniciar yt-dlp: {e}");
+            println!("[flux-ytdl] Error al iniciar yt-dlp: {e}");
             let msg = if e.kind() == std::io::ErrorKind::NotFound {
                 "yt-dlp no instalado"
             } else {
@@ -625,7 +617,7 @@ fn run_ytdlp(
     }
 
     let success = child.wait().map(|s| s.success()).unwrap_or(false);
-    println!("[orion-ytdl] Finalizado (éxito={success}): {last_path}");
+    println!("[flux-ytdl] Finalizado (éxito={success}): {last_path}");
 
     let _ = proxy.send_event(UserEvent::MediaDownloadDone {
         id,
@@ -681,11 +673,11 @@ fn make_content_view(
                 let security = SecurityLayer::new();
                 match security.check_url(&url) {
                     UrlDecision::Block(reason) => {
-                        println!("[orion-security] Bloqueado ({reason:?}): {url}");
+                        println!("[flux-security] Bloqueado ({reason:?}): {url}");
                         return false;
                     }
                     UrlDecision::Upgrade(https_url) => {
-                        println!("[orion-security] HTTP→HTTPS upgrade → {https_url}");
+                        println!("[flux-security] HTTP→HTTPS upgrade → {https_url}");
                         let _ = proxy_nav.send_event(UserEvent::Navigate {
                             native_id: id_nav.clone(),
                             url: https_url,
@@ -705,7 +697,7 @@ fn make_content_view(
         })
         .with_new_window_req_handler(move |url: String| {
             if url.starts_with("http://") || url.starts_with("https://") {
-                println!("[orion-browser] Nueva ventana interceptada → {url}");
+                println!("[flux-browser] Nueva ventana interceptada → {url}");
                 let _ = proxy_win.send_event(UserEvent::NavigateDirect {
                     native_id: id_win.clone(),
                     url,
@@ -726,14 +718,14 @@ fn make_content_view(
             let path_str = path.display().to_string();
             let id = url_to_id(&url);
 
-            println!("[orion-download] Iniciando (tab {}): {url} → {path_str}", id_dl_s);
+            println!("[flux-download] Iniciando (tab {}): {url} → {path_str}", id_dl_s);
             let _ = proxy_dl_s.send_event(UserEvent::DownloadStarted { id, url, filename, path: path_str });
             true
         })
         .with_download_completed_handler(move |url: String, path: Option<std::path::PathBuf>, success: bool| {
             let path_str = path.map(|p| p.display().to_string()).unwrap_or_default();
             let status = if success { "OK" } else { "Error" };
-            println!("[orion-download] {status} (tab {}): {url} → {path_str}", id_dl_d);
+            println!("[flux-download] {status} (tab {}): {url} → {path_str}", id_dl_d);
             let id = url_to_id(&url);
             let _ = proxy_dl_d.send_event(UserEvent::DownloadCompleted { id, url, path: path_str, success });
         })
@@ -823,7 +815,7 @@ fn main() {
                 }
             };
 
-            println!("[orion-engine] Corriendo en http://localhost:{ENGINE_PORT}");
+            println!("[Flux-engine] Corriendo en http://localhost:{ENGINE_PORT}");
             if let Err(e) = axum::serve(listener, app).await {
                 eprintln!("[flux-engine] El servidor de búsqueda se detuvo inesperadamente: {e}");
             }
@@ -898,12 +890,11 @@ fn main() {
         }})();"#
     );
 
-    // ── 3. Event loop ──────────────────────────────────────────────────────
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy     = event_loop.create_proxy();
-    let proxy_kbd = proxy.clone(); // para ytdlp threads y make_content_view dinámico
+    let proxy_kbd = proxy.clone();
 
-    // ── 3. Ventana nativa ─────────────────────────────────────────────────
+    // Ventana nativa────
     let window = WindowBuilder::new()
         .with_title("Flux Browser")
         .with_inner_size(LogicalSize::new(1400u32, 900u32))
@@ -919,18 +910,15 @@ fn main() {
     let init_w = phys.width  as f64 / scale;
     let init_h = phys.height as f64 / scale;
 
-    // ── 4a. HashMap de WebViews de contenido (uno por pestaña) ────────────
-    // Las pestañas se crean dinámicamente via IPC new_tab desde React.
-    // Cada WebView empieza oculto (0×0) y se hace visible al activarse.
+    // WebViews de contenido: uno por pestaña, se crean vía IPC new_tab.
+    // Cada uno empieza con bounds 0×0 y se hace visible al activarse.
     let content_views: std::cell::RefCell<std::collections::HashMap<String, wry::WebView>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
-    // native_id de la pestaña activa en este momento
     let active_native_id: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
-    // Última URL realmente cargada por cada WebView (para evitar recargas innecesarias)
     let loaded_urls: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 
-    // ── 4b. WebView del chrome — Z superior ───────────────────────────────
+    // WebView del chrome (React UI) — capa superior
     let permissions_ipc = permissions.clone();
 
     let chrome_view = WebViewBuilder::new()
@@ -938,7 +926,7 @@ fn main() {
         .with_transparent(true)
         .with_ipc_handler(move |msg| {
             let body = msg.body().to_string();
-            println!("[orion-browser] IPC recibido: {body}");
+            println!("[flux-browser] IPC recibido: {body}");
 
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
                 match val.get("cmd").and_then(|c| c.as_str()) {
@@ -953,7 +941,6 @@ fn main() {
                             let _ = proxy.send_event(UserEvent::SetZoom(level));
                         }
                     }
-                    // ── Multi-tab: crear WebView para nueva pestaña ────────
                     Some("new_tab") => {
                         let native_id = val.get("native_id")
                             .and_then(|n| n.as_str())
@@ -966,18 +953,16 @@ fn main() {
                             let _ = proxy.send_event(UserEvent::NewTab { native_id, incognito });
                         }
                     }
-                    // ── Multi-tab: destruir WebView de pestaña cerrada ──────
                     Some("close_tab") => {
                         let native_id = val.get("native_id")
                             .and_then(|n| n.as_str())
                             .unwrap_or("")
                             .to_string();
                         if !native_id.is_empty() {
-                            println!("[orion-browser] close_tab → {native_id}");
+                            println!("[flux-browser] close_tab → {native_id}");
                             let _ = proxy.send_event(UserEvent::CloseTab { native_id });
                         }
                     }
-                    // ── Navegación con native_id de pestaña ────────────────
                     Some("navigate") => {
                         let url = val.get("url")
                             .and_then(|u| u.as_str())
@@ -987,20 +972,19 @@ fn main() {
                             .and_then(|n| n.as_str())
                             .unwrap_or("")
                             .to_string();
-                        println!("[orion-browser] navigate tab={native_id} → {url}");
+                        println!("[flux-browser] navigate tab={native_id} → {url}");
                         let _ = proxy.send_event(UserEvent::Navigate { native_id, url });
                     }
                     Some("chrome_height") => {
                         if let Some(h) = val.get("height").and_then(|h| h.as_f64()) {
-                            println!("[orion-browser] chrome_height → {h}px");
+                            println!("[flux-browser] chrome_height → {h}px");
                             let _ = proxy.send_event(UserEvent::ChromeHeight(h));
                         }
                     }
                     Some("search") => {
                         let q = val.get("q").and_then(|q| q.as_str()).unwrap_or("");
-                        println!("[orion-browser] Búsqueda → {q}");
+                        println!("[flux-browser] Búsqueda → {q}");
                     }
-                    // ── Descarga con yt-dlp ────────────────────────────────
                     Some("download_media") => {
                         let url = val.get("url")
                             .and_then(|u| u.as_str())
@@ -1015,19 +999,17 @@ fn main() {
                             .unwrap_or("1080p")
                             .to_string();
                         let id = format!("ytdl-{}", now_ms());
-                        println!("[orion-ytdl] Solicitud: {url} fmt={format} q={quality} id={id}");
+                        println!("[flux-ytdl] Solicitud: {url} fmt={format} q={quality} id={id}");
                         let _ = proxy.send_event(UserEvent::MediaDownload { id, url, format, quality });
                     }
-                    // ── Cancelar descarga ──────────────────────────────────
                     Some("cancel_download") => {
                         if let Some(id) = val.get("id").and_then(|i| i.as_str()) {
-                            println!("[orion-browser] Cancelar descarga: {id}");
+                            println!("[flux-browser] Cancelar descarga: {id}");
                             // Las descargas nativas WebView2 no tienen API de cancelación en wry.
                             // Las descargas yt-dlp se manejan por proceso; en futuras versiones
                             // se puede almacenar el PID y enviarlo SIGTERM.
                         }
                     }
-                    // ── Mostrar en carpeta ────────────────────────────────
                     Some("show_in_folder") => {
                         if let Some(path) = val.get("path").and_then(|p| p.as_str()) {
                             let path = path.to_string();
@@ -1038,13 +1020,11 @@ fn main() {
                             });
                         }
                     }
-                    // ── Silenciar pestaña ─────────────────────────────────
                     Some("set_mute") => {
                         if let Some(muted) = val.get("muted").and_then(|m| m.as_bool()) {
                             let _ = proxy.send_event(UserEvent::SetMute(muted));
                         }
                     }
-                    // ── Decisión de permiso del usuario ───────────────────
                     Some("permission_decision") => {
                         let origin = val.get("origin").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         let kind   = val.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -1058,8 +1038,8 @@ fn main() {
                         let width = val.get("width").and_then(|w| w.as_f64()).unwrap_or(0.0);
                         let _ = proxy.send_event(UserEvent::AiPanelWidth(width));
                     }
-                    Some(cmd) => println!("[orion-browser] Comando desconocido: {cmd}"),
-                    None      => println!("[orion-browser] IPC sin campo 'cmd'"),
+                    Some(cmd) => println!("[flux-browser] Comando desconocido: {cmd}"),
+                    None      => println!("[flux-browser] IPC sin campo 'cmd'"),
                 }
             }
         })
@@ -1068,14 +1048,11 @@ fn main() {
             position: LogicalPosition::new(0.0, 0.0).into(),
             size: LogicalSize::new(init_w, init_h).into(),
         })
-        // Si la UI no carga (Vite no está corriendo), reintentar cada segundo hasta 30 intentos.
-        // Esto evita la pantalla negra cuando cargo run se lanza antes de npm run dev.
         .build_as_child(&window)
         .expect("No se pudo crear el WebView del chrome");
 
-    // ── Retry automático de la UI React ──────────────────────────────────────
-    // Si localhost:8082 no responde al abrirse (Vite aún no corre), un hilo de fondo
-    // sondea la conexión TCP y manda ReloadChrome cuando el servidor esté disponible.
+    // Si Vite aún no está listo (cargo run antes de npm run dev), un hilo
+    // sondea 127.0.0.1:8082 y recarga el chrome cuando el servidor responde.
     {
         let proxy_ui = event_loop.create_proxy();
         std::thread::spawn(move || {
@@ -1084,30 +1061,29 @@ fn main() {
             for attempt in 1u32..=60 {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if TcpStream::connect("127.0.0.1:8082").is_ok() {
-                    println!("[orion-browser] UI disponible en {UI_URL} (intento {attempt})");
+                    println!("[flux-browser] UI disponible en {UI_URL} (intento {attempt})");
                     let _ = proxy_ui.send_event(UserEvent::ReloadChrome);
                     return;
                 }
             }
-            println!("[orion-browser] UI no disponible después de 60 s — ejecuta `npm run dev`");
+            println!("[flux-browser] UI no disponible después de 60 s — ejecuta `npm run dev`");
         });
     }
 
-    println!("[orion-browser] Ventana abierta — chrome: {UI_URL}");
+    println!("[flux-browser] Ventana abierta — chrome: {UI_URL}");
 
     let chrome_full  = std::cell::Cell::new(true);
     let chrome_h     = std::cell::Cell::new(CHROME_HEIGHT);
     let ai_panel_w   = std::cell::Cell::new(0.0_f64);
     let ctrl_pressed = std::cell::Cell::new(false);
 
-    // ── 5. Event loop ──────────────────────────────────────────────────────
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
         let _ = &engine_handle;
 
         match event {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                println!("[orion-browser] Cerrando…");
+                println!("[flux-browser] Cerrando…");
                 if let Some(ref mut p) = backend_process {
                     let _ = p.kill();
                     println!("[flux-backend] proceso detenido");
@@ -1115,7 +1091,6 @@ fn main() {
                 *control_flow = ControlFlow::Exit;
             }
 
-            // ── Redimensionar ──────────────────────────────────────────────
             Event::WindowEvent { event: WindowEvent::Resized(phys_size), .. } => {
                 let scale = window.scale_factor();
                 let w  = phys_size.width  as f64 / scale;
@@ -1154,15 +1129,13 @@ fn main() {
                     });
                 }
 
-                println!("[orion-browser] Resize → {w:.0}×{h:.0} lógicos");
+                println!("[flux-browser] Resize → {w:.0}×{h:.0} lógicos");
             }
 
-            // ── Modificadores de teclado ───────────────────────────────────
             Event::WindowEvent { event: WindowEvent::ModifiersChanged(mods), .. } => {
                 ctrl_pressed.set(mods.contains(ModifiersState::CONTROL));
             }
 
-            // ── Atajos de teclado ──────────────────────────────────────────
             Event::WindowEvent {
                 event: WindowEvent::KeyboardInput { event: ref key_event, .. }, ..
             } => {
@@ -1179,13 +1152,11 @@ fn main() {
                 }
             }
 
-            // ── Reload de la UI React cuando 8082 responde ────────────────
             Event::UserEvent(UserEvent::ReloadChrome) => {
                 let _ = chrome_view.load_url(UI_URL);
-                println!("[orion-browser] UI recargada → {UI_URL}");
+                println!("[flux-browser] UI recargada → {UI_URL}");
             }
 
-            // ── Controles de ventana ───────────────────────────────────────
             Event::UserEvent(UserEvent::WindowMinimize) => { window.set_minimized(true); }
             Event::UserEvent(UserEvent::WindowMaximize) => { window.set_maximized(!window.is_maximized()); }
             Event::UserEvent(UserEvent::WindowClose) => {
@@ -1197,7 +1168,6 @@ fn main() {
             }
             Event::UserEvent(UserEvent::WindowDrag)     => { let _ = window.drag_window(); }
 
-            // ── Chrome height ──────────────────────────────────────────────
             Event::UserEvent(UserEvent::ChromeHeight(new_h)) => {
                 chrome_h.set(new_h);
                 let scale = window.scale_factor();
@@ -1220,10 +1190,9 @@ fn main() {
                     });
                 }
 
-                println!("[orion-browser] chrome_h actualizado → {new_h}px");
+                println!("[flux-browser] chrome_h actualizado → {new_h}px");
             }
 
-            // ── AI Panel width ─────────────────────────────────────────────
             Event::UserEvent(UserEvent::AiPanelWidth(new_pw)) => {
                 ai_panel_w.set(new_pw);
                 let scale = window.scale_factor();
@@ -1242,16 +1211,15 @@ fn main() {
                     }
                 }
 
-                println!("[orion-browser] ai_panel_w → {new_pw}px");
+                println!("[flux-browser] ai_panel_w → {new_pw}px");
             }
 
-            // ── Reload / Stop / Zoom ───────────────────────────────────────
             Event::UserEvent(UserEvent::Reload) => {
                 let aid = active_native_id.borrow().clone();
                 if let Some(view) = content_views.borrow().get(&aid) {
                     let _ = view.evaluate_script("location.reload()");
                 }
-                println!("[orion-browser] Recargando…");
+                println!("[flux-browser] Recargando…");
             }
 
             Event::UserEvent(UserEvent::StopLoad) => {
@@ -1259,7 +1227,7 @@ fn main() {
                 if let Some(view) = content_views.borrow().get(&aid) {
                     let _ = view.evaluate_script("window.stop()");
                 }
-                println!("[orion-browser] Deteniendo carga…");
+                println!("[flux-browser] Deteniendo carga…");
             }
 
             Event::UserEvent(UserEvent::SetZoom(level)) => {
@@ -1268,17 +1236,15 @@ fn main() {
                 if let Some(view) = content_views.borrow().get(&aid) {
                     let _ = view.evaluate_script(&js);
                 }
-                println!("[orion-browser] Zoom → {level}%");
+                println!("[flux-browser] Zoom → {level}%");
             }
 
-            // ── Focus barra de direcciones ─────────────────────────────────
             Event::UserEvent(UserEvent::FocusAddressBar) => {
                 let _ = chrome_view.evaluate_script(
                     "window.dispatchEvent(new CustomEvent('orion:focusaddressbar'));"
                 );
             }
 
-            // ── Permiso solicitado por un sitio ────────────────────────────
             Event::UserEvent(UserEvent::PermissionRequested { origin, kind }) => {
                 let label = match kind.as_str() {
                     "Camera"        => "la cámara",
@@ -1301,7 +1267,6 @@ fn main() {
                 println!("[flux-perms] Evento enviado a React → {origin} quiere {label}");
             }
 
-            // ── Silenciar pestaña ──────────────────────────────────────────
             Event::UserEvent(UserEvent::SetMute(muted)) => {
                 let js = if muted {
                     "document.querySelectorAll('audio,video').forEach(el=>el.muted=true)"
@@ -1312,10 +1277,9 @@ fn main() {
                 if let Some(view) = content_views.borrow().get(&aid) {
                     let _ = view.evaluate_script(js);
                 }
-                println!("[orion-browser] SetMute → {muted}");
+                println!("[flux-browser] SetMute → {muted}");
             }
 
-            // ── Multi-tab: crear WebView para nueva pestaña ────────────────
             Event::UserEvent(UserEvent::NewTab { native_id, incognito }) => {
                 if !content_views.borrow().contains_key(&native_id) {
                     let new_view = make_content_view(
@@ -1330,9 +1294,8 @@ fn main() {
                 }
             }
 
-            // ── Multi-tab: destruir WebView de pestaña cerrada ─────────────
             Event::UserEvent(UserEvent::CloseTab { native_id }) => {
-                println!("[orion-browser] Destruyendo WebView de tab {native_id}");
+                println!("[flux-browser] Destruyendo WebView de tab {native_id}");
                 content_views.borrow_mut().remove(&native_id);
                 loaded_urls.borrow_mut().remove(&native_id);
                 let current = active_native_id.borrow().clone();
@@ -1353,7 +1316,6 @@ fn main() {
                 }
             }
 
-            // ── Descarga nativa: iniciada ──────────────────────────────────
             Event::UserEvent(UserEvent::DownloadStarted { id, url, filename, path }) => {
                 let t = now_ms();
                 let detail = serde_json::json!({
@@ -1375,7 +1337,6 @@ fn main() {
                 let _ = chrome_view.evaluate_script(&js);
             }
 
-            // ── Descarga nativa: completada ────────────────────────────────
             Event::UserEvent(UserEvent::DownloadCompleted { id, url, path, success }) => {
                 let t = now_ms();
                 let state = if success { "completed" } else { "interrupted" };
@@ -1399,9 +1360,7 @@ fn main() {
                 let _ = chrome_view.evaluate_script(&js);
             }
 
-            // ── yt-dlp: iniciar en hilo secundario ─────────────────────────
             Event::UserEvent(UserEvent::MediaDownload { id, url, format, quality }) => {
-                // Notificar a React que la descarga está en cola
                 let t = now_ms();
                 let detail = serde_json::json!({
                     "id": id,
@@ -1421,14 +1380,12 @@ fn main() {
                 );
                 let _ = chrome_view.evaluate_script(&js);
 
-                // Lanzar yt-dlp en hilo separado
                 let proxy_thread = proxy_kbd.clone();
                 std::thread::spawn(move || {
                     run_ytdlp(proxy_thread, id, url, format, quality);
                 });
             }
 
-            // ── yt-dlp: progreso ───────────────────────────────────────────
             Event::UserEvent(UserEvent::MediaDownloadProgress {
                 id, url, filename, percent, speed_bps, received, total
             }) => {
@@ -1452,7 +1409,6 @@ fn main() {
                 let _ = chrome_view.evaluate_script(&js);
             }
 
-            // ── yt-dlp: completado ─────────────────────────────────────────
             Event::UserEvent(UserEvent::MediaDownloadDone {
                 id, url, filename, path, success
             }) => {
@@ -1477,7 +1433,6 @@ fn main() {
                 let _ = chrome_view.evaluate_script(&js);
             }
 
-            // ── Navegación principal (multi-tab) ──────────────────────────
             Event::UserEvent(UserEvent::Navigate { native_id, url }) => {
                 let scale = window.scale_factor();
                 let phys  = window.inner_size();
@@ -1502,7 +1457,7 @@ fn main() {
                     let security = SecurityLayer::new();
                     let final_url = match security.check_url(&url) {
                         UrlDecision::Block(reason) => {
-                            println!("[orion-security] Bloqueado ({reason:?}): {url}");
+                            println!("[flux-security] Bloqueado ({reason:?}): {url}");
                             chrome_full.set(false);
                             let _ = chrome_view.set_bounds(Rect {
                                 position: LogicalPosition::new(0.0, 0.0).into(),
@@ -1523,7 +1478,7 @@ fn main() {
                             return;
                         }
                         UrlDecision::Upgrade(https_url) => {
-                            println!("[orion-security] HTTP→HTTPS upgrade → {https_url}");
+                            println!("[flux-security] HTTP→HTTPS upgrade → {https_url}");
                             https_url
                         }
                         UrlDecision::Allow => url.clone(),
@@ -1544,10 +1499,10 @@ fn main() {
                         let last = loaded_urls.borrow().get(&native_id).cloned().unwrap_or_default();
                         if last != final_url {
                             loaded_urls.borrow_mut().insert(native_id.clone(), final_url.clone());
-                            println!("[orion-browser] tab={native_id} → {final_url}");
+                            println!("[flux-browser] tab={native_id} → {final_url}");
                             let _ = view.load_url(&final_url);
                         } else {
-                            println!("[orion-browser] tab={native_id} ya tiene {final_url} (sin recarga)");
+                            println!("[flux-browser] tab={native_id} ya tiene {final_url} (sin recarga)");
                         }
                     }
 
@@ -1588,7 +1543,7 @@ fn main() {
                         size: LogicalSize::new((w - pw).max(0.0), (h - ch).max(0.0)).into(),
                     });
                     loaded_urls.borrow_mut().insert(native_id.clone(), url.clone());
-                    println!("[orion-browser] NavigateDirect tab={native_id} → {url}");
+                    println!("[flux-browser] NavigateDirect tab={native_id} → {url}");
                     let _ = view.load_url(&url);
                 }
             }
