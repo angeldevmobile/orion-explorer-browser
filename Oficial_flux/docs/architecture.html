@@ -61,7 +61,7 @@
           <div style="color:#64748b;">flux-browser.exe &nbsp;&nbsp;← proceso principal Rust</div>
           <div style="color:#e2e8f0;">&nbsp;&nbsp;├── <span style="color:#06b6d4;">chrome_view</span> &nbsp;&nbsp;&nbsp;← WebView2 para la UI React del browser</div>
           <div style="color:#e2e8f0;">&nbsp;&nbsp;├── <span style="color:#2dd4bf;">content_view</span> &nbsp;&nbsp;← WebView2 para las páginas web</div>
-          <div style="color:#e2e8f0;">&nbsp;&nbsp;└── <span style="color:#a78bfa;">flux-backend</span> &nbsp;&nbsp;← sidecar Node.js (SQLite local)</div>
+          <div style="color:#e2e8f0;">&nbsp;&nbsp;└── <span style="color:#a78bfa;">flux-backend</span> &nbsp;&nbsp;← sidecar Node.js · SQLite local · datos del usuario</div>
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -70,7 +70,7 @@
             <div style="width:10px;height:10px;background:#06b6d4;border-radius:50%;"></div>
             <p class="text-slate-300 font-bold text-sm">flux-engine (Rust)</p>
           </div>
-          <p class="text-slate-400 text-sm">Motor principal. Pipeline HTML/CSS/JS, seguridad, BM25 ranking, servidor Axum en :4000. Sin Node.js, sin Electron.</p>
+          <p class="text-slate-400 text-sm">Motor principal. Pipeline HTML/CSS/JS, seguridad, BM25 ranking, servidor Axum. Sin Node.js, sin Electron.</p>
         </div>
         <div class="glass-card p-5">
           <div class="flex items-center gap-2 mb-3">
@@ -84,7 +84,7 @@
             <div style="width:10px;height:10px;background:#a78bfa;border-radius:50%;"></div>
             <p class="text-slate-300 font-bold text-sm">flux-backend (Node.js)</p>
           </div>
-          <p class="text-slate-400 text-sm">Sidecar Express + Prisma + SQLite en :3000. Gestiona historial, favoritos, auth JWT, Gemini IA. Distribuido como exe standalone.</p>
+          <p class="text-slate-400 text-sm">Sidecar Express + Prisma + SQLite. Gestiona historial, favoritos, auth JWT, Gemini IA. Distribuido como exe standalone.</p>
         </div>
       </div>
     </section>
@@ -309,7 +309,7 @@
           <div style="color:#94a3b8;">DATABASE_URL=<span style="color:#2dd4bf;">file:./flux.db</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# SQLite local</div>
           <div style="color:#94a3b8;">JWT_SECRET=<span style="color:#2dd4bf;">cambia_esto_por_un_secret_largo</span></div>
           <div style="color:#94a3b8;">GEMINI_API_KEY=<span style="color:#2dd4bf;">tu_api_key_aqui</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# para IA, OCR, canciones</div>
-          <div style="color:#94a3b8;">PORT=<span style="color:#2dd4bf;">3000</span></div>
+          <div style="color:#94a3b8;">PORT=<span style="color:#2dd4bf;">[configurable]</span></div>
         </div>
       </div>
     </section>
