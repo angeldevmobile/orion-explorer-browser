@@ -757,7 +757,7 @@ fn make_content_view(
                 let key = (origin.clone(), kind.clone());
 
                 let (allowed, pending) = {
-                    let store = permissions.lock().unwrap();
+                    let store = permissions.lock().unwrap_or_else(|e| e.into_inner());
                     match store.get(&key) {
                         Some(&a) => (a, false),
                         None     => (false, true),
@@ -780,7 +780,12 @@ fn make_content_view(
                     .header(wry::http::header::CONTENT_TYPE, "application/json")
                     .header("Access-Control-Allow-Origin", "*")
                     .body(std::borrow::Cow::Owned(body.into_bytes()))
-                    .unwrap()
+                    .unwrap_or_else(|_| {
+                        wry::http::Response::builder()
+                            .status(500)
+                            .body(std::borrow::Cow::Borrowed(b"" as &[u8]))
+                            .expect("fallback response siempre válido")
+                    })
             }
         })
         .build_as_child(window)
@@ -792,8 +797,14 @@ fn make_content_view(
 fn main() {
     // ── 1. Engine HTTP en hilo secundario ─────────────────────────────────
     let engine_handle = std::thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new()
-            .expect("No se pudo crear el runtime de Tokio");
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("[flux-engine] No se pudo crear el runtime de Tokio: {e}");
+                eprintln!("[flux-engine] La búsqueda local no estará disponible.");
+                return;
+            }
+        };
 
         rt.block_on(async {
             let state = Arc::new(orion_engine::api::AppState {
@@ -803,14 +814,19 @@ fn main() {
             let app = orion_engine::api::build_router(state);
 
             let addr = format!("0.0.0.0:{ENGINE_PORT}");
-            let listener = tokio::net::TcpListener::bind(&addr)
-                .await
-                .unwrap_or_else(|e| panic!("Engine: no se pudo bindear {addr}: {e}"));
+            let listener = match tokio::net::TcpListener::bind(&addr).await {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("[flux-engine] No se pudo bindear {addr}: {e}");
+                    eprintln!("[flux-engine] La búsqueda local no estará disponible.");
+                    return;
+                }
+            };
 
             println!("[orion-engine] Corriendo en http://localhost:{ENGINE_PORT}");
-            axum::serve(listener, app)
-                .await
-                .expect("Error en el servidor del engine");
+            if let Err(e) = axum::serve(listener, app).await {
+                eprintln!("[flux-engine] El servidor de búsqueda se detuvo inesperadamente: {e}");
+            }
         });
     });
 
@@ -1034,7 +1050,7 @@ fn main() {
                         let kind   = val.get("kind").and_then(|v| v.as_str()).unwrap_or("").to_string();
                         let allow  = val.get("allow").and_then(|v| v.as_bool()).unwrap_or(false);
                         if !origin.is_empty() && !kind.is_empty() {
-                            permissions_ipc.lock().unwrap().insert((origin.clone(), kind.clone()), allow);
+                            permissions_ipc.lock().unwrap_or_else(|e| e.into_inner()).insert((origin.clone(), kind.clone()), allow);
                             println!("[flux-perms] Decisión guardada — {origin} {kind}: {allow}");
                         }
                     }

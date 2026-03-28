@@ -74,6 +74,7 @@ Flux está diseñado desde cero con un modelo **privacy-first y local-first**. N
 | **HTTPS-only** | Upgrade automático HTTP → HTTPS en todas las peticiones antes de cargar la página |
 | **HSTS preload** | Lista embebida de dominios que siempre usan HTTPS — no hay primera petición insegura |
 | **Ad/tracker blocker** | Bloqueo de ~40 dominios de rastreo y publicidad (EasyList/EasyPrivacy subset) integrado en el engine Rust |
+| **Bloqueador de anuncios YouTube** | Tres capas: (1) parchea `ytInitialPlayerResponse` antes de que YouTube lo lea para eliminar `adPlacements` y `playerAds`, (2) CSS cosmético que oculta overlays y banners residuales, (3) intercepta `fetch`/`XHR` para bloquear URLs de tracking (`/api/stats/ads`, `/pagead/`) |
 | **CSP enforcement** | Parseo y aplicación del `Content-Security-Policy` del servidor — bloquea scripts inline no autorizados y peticiones `fetch()` fuera de `connect-src` |
 | **JS sandbox** | El runtime JavaScript corre en QuickJS con 16 MB de heap y 512 KB de stack máximo — sin acceso al filesystem ni al sistema operativo |
 | **Permisos explícitos** | Cámara, micrófono y geolocalización requieren confirmación del usuario vía barra de permisos nativa — igual que Chrome/Firefox |
@@ -549,12 +550,15 @@ docker compose up -d
 - [x] yt-dlp bundleado — sin instalación manual para el usuario
 - [x] flux-backend.exe como sidecar — arranca y cierra con el browser
 - [x] Sistema de permisos nativos (cámara, micrófono, notificaciones) via Rust
+- [x] Bloqueador de anuncios YouTube — scriptlet + CSS cosmético + intercepción fetch/XHR
+- [x] Manejo graceful de fallos del engine — si el puerto 4000 está ocupado el browser sigue funcionando
 - [ ] Conectar FluxSoftRenderer al content_view de la ventana nativa
 - [ ] Flexbox layout
 - [ ] Imágenes (`<img>` decodificada y pintada en el buffer)
 - [ ] Cookie jar por dominio
 - [ ] Caché HTTP (ETag, Cache-Control)
 - [ ] `setInterval` / eventos de input reales
+- [ ] Bloqueador general con listas EasyList/EasyPrivacy (crate `adblock`, actualización automática)
 
 ### wry — Ventana nativa
 
@@ -590,7 +594,7 @@ docker compose up -d
 - [x] Registro de descargas
 - [x] **Migración a SQLite** — sin dependencia de PostgreSQL ni Docker
 - [x] **Backend como exe standalone** — no requiere Node.js instalado
-- [ ] Sincronización entre dispositivos *(UI lista en Settings, backend pendiente)*
+- [ ] Sincronización entre dispositivos *(UI lista en Settings — diferida para post-beta)*
 
 ### UI
 
@@ -669,6 +673,34 @@ flux-browser/
 ├── vite.config.ts
 └── package.json
 ```
+
+---
+
+## Lo que viene — Post Beta 1
+
+### Prioridad alta
+| Feature | Descripción |
+|---|---|
+| **Bloqueador general con EasyList** | Integrar el crate `adblock` (el motor de Brave, open source en Rust) con descarga automática de listas EasyList + EasyPrivacy cada 3 días — cobertura de ~100k dominios sin mantenimiento manual |
+| **Integrar FluxSoftRenderer** | Conectar el pipeline Rust al `content_view` — primer paso para reemplazar WebView2 como renderer de páginas |
+| **Flexbox layout** | Necesario para que cualquier página moderna cargue correctamente en el motor propio |
+| **Imágenes (`<img>`)** | Decodificación y pintado en el pixel buffer del renderer |
+
+### Prioridad media
+| Feature | Descripción |
+|---|---|
+| **Sincronización entre dispositivos** | Sync cifrado de favoritos, historial y preferencias usando la cuenta Flux existente |
+| **Cookie jar por dominio** | Persistencia de sesiones en el motor propio (login en sitios) |
+| **Caché HTTP** | Soporte de `ETag` / `Cache-Control` para reducir peticiones repetidas |
+| **`setInterval` / timers reales** | Necesario para animaciones y polling en el motor JS |
+
+### Prioridad baja / investigación
+| Feature | Descripción |
+|---|---|
+| **CSS Grid** | Layout de grilla nativo en el engine |
+| **GPU acceleration** | Reemplazar el soft renderer por un pipeline con `wgpu` para páginas complejas |
+| **Soporte macOS** | El engine ya compila en macOS — falta validar la UI y el empaquetado |
+| **Extensiones nativas Flux** | Sistema propio (sin WebExtensions) para plugins de privacidad y productividad |
 
 ---
 
