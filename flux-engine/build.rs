@@ -12,18 +12,18 @@ fn main() {
     let bin_dir  = manifest.join("bin");
     let out_dir  = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    // ── 1. Declarar cfgs personalizados (evita warnings de check-cfg) ─────────
+    // 1. Declarar cfgs personalizados (evita warnings de check-cfg)
     println!("cargo::rustc-check-cfg=cfg(has_dist)");
     println!("cargo::rustc-check-cfg=cfg(has_backend)");
 
-    // ── OUT_DIR → target/<profile>/ ───────────────────────────────────────────
+    // OUT_DIR → target/<profile>/
     let profile_dir = out_dir
         .ancestors()
         .nth(3)
         .unwrap_or(&out_dir)
         .to_path_buf();
 
-    // ── 2. UI React (dist/) → ui_embed.rs ────────────────────────────────────
+    // 2. UI React (dist/) → ui_embed.rs
     // Si dist/index.html existe:  genera static DIST con include_dir! y activa has_dist.
     // Si no existe:               genera un stub vacío (modo desarrollo con Vite).
     let dist_dir = manifest.join("..").join("dist");
@@ -52,7 +52,7 @@ fn main() {
         );
     }
 
-    // ── 3. yt-dlp.exe ─────────────────────────────────────────────────────────
+    // 3. yt-dlp.exe
     let ytdlp_src = bin_dir.join("yt-dlp.exe");
     if ytdlp_src.exists() {
         let dst = profile_dir.join("yt-dlp.exe");
@@ -70,7 +70,7 @@ fn main() {
         );
     }
 
-    // ── 4. Backend embebido (bin/flux-backend.exe) ────────────────────────────
+    // 4. Backend embebido (bin/flux-backend.exe)
     // Compilar con: cd flux-backend && npx pkg . -o ../flux-engine/bin/flux-backend.exe
     let backend_src = bin_dir.join("flux-backend.exe");
     if backend_src.exists() {
