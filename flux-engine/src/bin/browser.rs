@@ -53,6 +53,87 @@ const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
      (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OrionBrowser/0.1";
 
+/// Script de bloqueo de anuncios inyectado en cada página antes de que cargue
+/// cualquier script del sitio. Actualmente cubre YouTube con tres capas:
+///   1. Parchea ytInitialPlayerResponse para eliminar adPlacements/playerAds
+///   2. CSS cosmético para ocultar elementos residuales de anuncios
+///   3. Intercepta fetch/XHR para bloquear peticiones de tracking de anuncios
+const ADBLOCK_INIT_SCRIPT: &str = r#"(function() {
+  'use strict';
+
+  /* ── YouTube Ad Blocker ─────────────────────────────────── */
+  if (!location.hostname.includes('youtube.com')) return;
+
+  // 1. Patch ytInitialPlayerResponse — elimina anuncios del objeto del player
+  //    Se ejecuta ANTES que los scripts de YouTube, así que el setter
+  //    intercepta el valor cuando YouTube lo asigna.
+  var _ytIPR;
+  function _stripYtAds(v) {
+    if (v && typeof v === 'object') {
+      v.adPlacements             = [];
+      v.playerAds                = [];
+      v.adSlots                  = [];
+      v.adBreakHeartbeatParams   = undefined;
+    }
+    return v;
+  }
+  Object.defineProperty(window, 'ytInitialPlayerResponse', {
+    get: function() { return _ytIPR; },
+    set: function(v) { _ytIPR = _stripYtAds(v); },
+    configurable: true,
+  });
+
+  // 2. CSS cosmético — oculta elementos residuales de anuncios
+  var _adStyle = document.createElement('style');
+  _adStyle.textContent = [
+    '.ad-showing .video-ads',
+    '.ad-interrupting',
+    '#player-ads',
+    '.ytp-ad-module',
+    '.ytp-ad-overlay-container',
+    '.ytp-ad-text-overlay',
+    'ytd-action-companion-ad-renderer',
+    'ytd-display-ad-renderer',
+    'ytd-promoted-video-renderer',
+    'ytd-search-pyv-renderer',
+    'ytd-video-masthead-ad-v3-renderer',
+    'ytd-promoted-sparkles-web-renderer',
+    '#masthead-ad',
+    '.ytd-banner-promo-renderer',
+  ].join(',') + '{ display:none !important; }';
+  var _injectAdStyle = function() {
+    (document.head || document.documentElement).appendChild(_adStyle);
+  };
+  if (document.head) { _injectAdStyle(); }
+  else { document.addEventListener('DOMContentLoaded', _injectAdStyle, { once: true }); }
+
+  // 3. Intercepta fetch/XHR para bloquear URLs de tracking de anuncios
+  var AD_URLS = ['/api/stats/ads', '/pagead/', '/ptracking'];
+  var _origFetch = window.fetch;
+  window.fetch = function(input) {
+    var url = (typeof input === 'string') ? input : (input && input.url) || '';
+    for (var i = 0; i < AD_URLS.length; i++) {
+      if (url.indexOf(AD_URLS[i]) !== -1) {
+        return Promise.resolve(new Response('', { status: 200 }));
+      }
+    }
+    return _origFetch.apply(this, arguments);
+  };
+  var _origXHROpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    if (typeof url === 'string') {
+      for (var i = 0; i < AD_URLS.length; i++) {
+        if (url.indexOf(AD_URLS[i]) !== -1) {
+          url = 'about:blank';
+          break;
+        }
+      }
+    }
+    return _origXHROpen.apply(this, arguments);
+  };
+
+})();"#;
+
 #[derive(Debug)]
 enum UserEvent {
     WindowMinimize,
@@ -657,6 +738,7 @@ fn make_content_view(
             let _ = proxy_dl_d.send_event(UserEvent::DownloadCompleted { id, url, path: path_str, success });
         })
         .with_initialization_script(offline_init_script)
+        .with_initialization_script(ADBLOCK_INIT_SCRIPT)
         .with_custom_protocol("fluxperm".into(), {
             let permissions = permissions.clone();
             let proxy_perm  = proxy.clone();
